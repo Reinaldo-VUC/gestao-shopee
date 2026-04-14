@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>Gestão Shopee VUC</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0f13;--sf:#1c1f27;--s2:#21252e;--bd:#272b36;
+  --tx:#eef0f4;--t2:#7a8294;--ac:#f05a28;--gn:#34d399;--rd:#f43f5e;--yw:#fbbf24;--bl:#60a5fa;
+}
+.light{
+  --bg:#f0f4f8;--sf:#fff;--s2:#f8fafc;--bd:#e2e8f0;
+  --tx:#1a202c;--t2:#64748b;--gn:#16a34a;--rd:#e11d48;--yw:#d97706;--bl:#2563eb;
+}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--tx);min-height:100vh}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input:focus,select:focus{border-color:var(--ac)!important;outline:none}
+
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+/* Header */
+#hdr{padding:13px 18px;background:rgba(28,31,39,.96);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:500;
+  display:flex;align-items:center;justify-content:space-between}
+.light #hdr{background:rgba(255,255,255,.96)}
+.lbox{width:38px;height:38px;border-radius:11px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.ltx{font-size:15px;font-weight:800;font-family:'Sora',sans-serif;color:var(--tx);line-height:1.1}
+.lsb{font-size:10px;color:var(--t2)}
+#tbtn{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:7px 13px;cursor:pointer;font-size:17px;color:var(--tx)}
+
+/* Content */
+#cnt{flex:1;padding:18px 14px 90px;overflow-y:auto}
+
+/* Nav */
+#nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
+  background:rgba(28,31,39,.97);backdrop-filter:blur(14px);border-top:1px solid var(--bd);
+  display:flex;z-index:500}
+.light #nav{background:rgba(255,255,255,.97)}
+.nb{flex:1;padding:9px 4px 11px;background:none;border:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border-top:2.5px solid transparent;transition:.15s;color:var(--t2)}
+.nb.active{border-color:var(--ac);color:var(--ac)}
+.ni{font-size:20px;line-height:1}.nl{font-size:10px;font-weight:600;font-family:'Sora',sans-serif;letter-spacing:.03em}
+
+/* Cards */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:16px;padding:18px;margin-bottom:14px}
+.ct{font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+
+/* KPI */
+.kg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:16px;padding:15px;border-left:3px solid}
+.ki{font-size:20px;margin-bottom:4px}
+.kl{font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em}
+.kv{font-size:16px;font-weight:800;font-family:'Sora',sans-serif;margin:4px 0 2px;line-height:1.2}
+.ks{font-size:10px;color:var(--t2)}
+
+/* Buttons */
+.btn{background:var(--ac);color:#fff;border:none;border-radius:10px;padding:12px 20px;
+  font-size:14px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;width:100%;transition:.15s}
+.btn:active{opacity:.8}
+.bsm{padding:7px 14px;font-size:12px;border-radius:8px;width:auto}
+.brd{background:var(--rd)}.bgh{background:var(--s2);color:var(--tx);border:1.5px solid var(--bd)}
+.bgn{background:var(--gn);color:#000}
+
+/* Row */
+.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--bd)}
+.row:last-child{border-bottom:none}
+.rl{font-size:13px;color:var(--t2)}.rv{font-size:13px;font-weight:700;color:var(--tx)}
+
+/* Item */
+.item{display:flex;justify-content:space-between;align-items:flex-start;padding:11px 12px;
+  border-radius:10px;margin-bottom:8px;background:var(--s2);border:1px solid var(--bd)}
+.itx{font-size:13px;font-weight:600;color:var(--tx)}.isb{font-size:11px;color:var(--t2);margin-top:2px;line-height:1.5}
+
+/* Form */
+.fld{margin-bottom:13px}
+.lbl{display:block;font-size:11px;font-weight:700;color:var(--t2);margin-bottom:5px;
+  text-transform:uppercase;letter-spacing:.06em}
+.inp{width:100%;padding:11px 13px;border-radius:10px;font-size:14px;
+  background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);font-family:'DM Sans',sans-serif}
+.inp-row{display:flex;gap:8px}
+
+/* Days picker */
+.days-pick{display:flex;gap:6px;margin-top:4px}
+.day-btn{flex:1;padding:10px 4px;border-radius:8px;border:1.5px solid var(--bd);
+  background:var(--s2);color:var(--t2);cursor:pointer;font-size:12px;font-weight:600;
+  font-family:'Sora',sans-serif;text-align:center;transition:.15s}
+.day-btn.on{border-color:var(--ac);background:rgba(240,90,40,.12);color:var(--ac);font-weight:700}
+
+/* Modal */
+#ov{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.65);
+  backdrop-filter:blur(6px);align-items:flex-end;justify-content:center}
+#ov.open{display:flex}
+#mb{background:var(--sf);border:1px solid var(--bd);border-radius:20px 20px 0 0;
+  padding:8px 0 0;width:100%;max-width:480px;max-height:93vh;overflow-y:auto;
+  animation:up .25s cubic-bezier(.4,0,.2,1)}
+@keyframes up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.drag{width:36px;height:4px;border-radius:2px;background:var(--bd);margin:0 auto 16px}
+.mi{padding:0 20px 32px}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.mt{font-size:17px;font-weight:800;font-family:'Sora',sans-serif;color:var(--tx)}
+.mc{background:var(--s2);border:none;border-radius:8px;width:32px;height:32px;
+  cursor:pointer;font-size:18px;color:var(--t2);display:flex;align-items:center;justify-content:center}
+
+/* Calc box */
+.cbox{background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.crow{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;color:var(--t2)}
+.crow b{color:var(--tx)}
+.ctot{border-top:1px solid var(--bd);margin-top:6px;padding-top:10px;font-weight:800;font-size:14px;color:var(--tx)}
+.ctot span{font-size:15px}
+
+/* Chart */
+.chw{display:flex;align-items:flex-end;gap:6px;height:60px}
+.cbw{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.cb{width:100%;border-radius:4px;background:var(--ac);transition:height .5s cubic-bezier(.4,0,.2,1)}
+.clb{font-size:9px;color:var(--t2)}
+
+/* Alert */
+.alrt{border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px}
+.aicon{font-size:20px;flex-shrink:0;margin-top:1px}
+.atitle{font-size:13px;font-weight:700}
+.asub{font-size:11px;margin-top:2px;opacity:.85}
+.a-or{background:rgba(240,90,40,.1);border:1px solid rgba(240,90,40,.25);color:var(--ac)}
+.a-rd{background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.25);color:var(--rd)}
+.a-yw{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:var(--yw)}
+.a-bl{background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);color:var(--bl)}
+.a-gn{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:var(--gn)}
+
+/* Toggle */
+.trow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--bd)}
+.trow:last-child{border-bottom:none}
+.tog{position:relative;width:44px;height:24px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0}
+.sldr{position:absolute;cursor:pointer;inset:0;background:var(--bd);border-radius:99px;transition:.3s}
+.sldr:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+input:checked+.sldr{background:var(--ac)}
+input:checked+.sldr:before{transform:translateX(20px)}
+
+/* Proj */
+.pbg{background:var(--bd);border-radius:99px;height:8px;overflow:hidden;margin:8px 0 4px}
+.pfill{height:100%;border-radius:99px;background:var(--ac);transition:width .6s}
+
+/* Colors */
+.c-gn{color:var(--gn)}.c-rd{color:var(--rd)}.c-yw{color:var(--yw)}.c-ac{color:var(--ac)}.c-bl{color:var(--bl)}
+.fw8{font-weight:800}.ff{font-family:'Sora',sans-serif}
+
+/* Motorista summary */
+.mot-week{background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);
+  border-radius:10px;padding:10px 12px;margin-top:8px}
+
+.sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.st{font-size:18px;font-weight:800;font-family:'Sora',sans-serif;color:var(--tx)}
+.del{background:none;border:none;cursor:pointer;font-size:16px;color:var(--rd);padding:4px;flex-shrink:0}
+.nfe-box{background:rgba(240,90,40,.07);border:1px solid rgba(240,90,40,.22);border-radius:16px;padding:16px;margin-bottom:14px}
+.light .nfe-box{background:#fff5f0;border-color:#fcd9c8}
+.empty{text-align:center;padding:40px 20px;color:var(--t2)}
+
+.divider{font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="lbox">🚛</div>
+      <div><div class="ltx">Gestão Shopee VUC</div><div class="lsb">Jundiaí · SP</div></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="exportBackup()" title="Salvar backup" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:7px 11px;cursor:pointer;font-size:15px;color:var(--tx)">💾</button>
+      <button id="tbtn" onclick="toggleTheme()">☀️</button>
+    </div>
+  </div>
+  <!-- Restore input hidden -->
+  <input type="file" id="restore-input" accept=".json" style="display:none" onchange="importBackup(this)"/>
+  <div id="cnt"></div>
+  <div id="nav">
+    <button class="nb active" onclick="go('dash')" id="nav-dash"><span class="ni">📊</span><span class="nl">Painel</span></button>
+    <button class="nb" onclick="go('ent')" id="nav-ent"><span class="ni">📥</span><span class="nl">Entradas</span></button>
+    <button class="nb" onclick="go('desp')" id="nav-desp"><span class="ni">📤</span><span class="nl">Despesas</span></button>
+    <button class="nb" onclick="go('cfg')" id="nav-cfg"><span class="ni">⚙️</span><span class="nl">Config</span></button>
+  </div>
+</div>
+
+<div id="ov" onclick="closeModal()">
+  <div id="mb" onclick="event.stopPropagation()">
+    <div class="drag"></div>
+    <div class="mi" id="mi"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════ DB ═══════════════════════════════════════════════════════════
+const KEY = 'shopee_vuc_v4';
+function defDB(){
+  return {
+    cfg:{
+      // Shopee (por dia)
+      fixoDia:160, pedagioDia:30, pedagioShopee:35, valorPacote:0.50,
+      // Motorista (por dia)
+      diaria:120, valeRefeicaoDia:20,
+      // Fixas mensais
+      financiamento:1800, seguro:0, fixasExtras:[],
+      // Geral
+      tema:'dark',
+      // Lembretes
+      lem:{
+        nfSeg:true, salario:true,
+        ipva:true, ipvaMes:7,
+        seguro:false, seguroVenc:'',
+        revisao:true, revisaoMeses:3, revisaoUlt:''
+      }
+    },
+    semanas:[], variaveis:[]
+  };
+}
+let DB = (()=>{
+  try{ const d=localStorage.getItem(KEY); if(!d) return defDB();
+    const p=JSON.parse(d); const def=defDB();
+    return { cfg:{...def.cfg,...p.cfg, lem:{...def.cfg.lem,...(p.cfg?.lem||{})}}, semanas:p.semanas||[], variaveis:p.variaveis||[] };
+  }catch(e){return defDB();}
+})();
+function save(){ localStorage.setItem(KEY,JSON.stringify(DB)); }
+
+// ═══════════════ HELPERS ══════════════════════════════════════════════════════
+const R$=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const today=()=>new Date().toISOString().slice(0,10);
+const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MF=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const CATS={'Combustível':'⛽','Manutenção':'🔧','Pneus/Peças':'🔩','IPVA/Licenciamento':'📋','Outros':'📌'};
+
+function mAStr(ds){ if(!ds)return ''; const d=new Date(ds+'T12:00:00'); return String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function curMA(){ const d=new Date(); return String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function mALbl(ma){ if(!ma)return ''; const[m,y]=ma.split('/'); return MN[parseInt(m)-1]+' '+y; }
+function grpBy(arr){ const g={}; [...arr].reverse().forEach(x=>{ const k=mAStr(x.data); if(!g[k])g[k]=[]; g[k].push(x); }); return g; }
+
+// ═══════════════ THEME ════════════════════════════════════════════════════════
+function applyTheme(){ document.body.classList.toggle('light',DB.cfg.tema==='light'); document.getElementById('tbtn').textContent=DB.cfg.tema==='dark'?'☀️':'🌙'; }
+function toggleTheme(){ DB.cfg.tema=DB.cfg.tema==='dark'?'light':'dark'; save(); applyTheme(); }
+applyTheme();
+
+// ═══════════════ TABS ═════════════════════════════════════════════════════════
+let TAB='dash';
+function go(t){ TAB=t; document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active')); document.getElementById('nav-'+t).classList.add('active'); render(); window.scrollTo(0,0); }
+
+// ═══════════════ COMPUTE ══════════════════════════════════════════════════════
+function compute(ma){
+  ma=ma||curMA();
+  const c=DB.cfg;
+  const semMes=DB.semanas.filter(s=>mAStr(s.data)===ma);
+  const varMes=DB.variaveis.filter(v=>mAStr(v.data)===ma);
+
+  const recBruta   = semMes.reduce((a,s)=>a+(+s.total||0),0);
+  const totPacotes = semMes.reduce((a,s)=>a+(+s.pkts||0),0);
+  const totDias    = semMes.reduce((a,s)=>a+(+s.dias||0),0);
+  const totSobPed  = semMes.reduce((a,s)=>a+(+s.sobraPed||0),0);
+
+  // Custo motorista no mês (diária + vale × dias)
+  const custoMot   = semMes.reduce((a,s)=>a+(+s.custoMot||0),0);
+
+  const totalFixas = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+  const totalVar   = varMes.reduce((a,v)=>a+(+v.valor||0),0);
+  const totalDesp  = totalFixas+totalVar+custoMot;
+  const lucro      = recBruta-totalDesp;
+  const custoPkt   = totPacotes>0?totalDesp/totPacotes:0;
+
+  const semCont    = semMes.length;
+  const mediaRec   = semCont>0?recBruta/semCont:0;
+  const proj       = mediaRec*4.3;
+
+  return {ma,semMes,varMes,recBruta,totPacotes,totDias,totSobPed,custoMot,totalFixas,totalVar,totalDesp,lucro,custoPkt,semCont,proj};
+}
+
+// ═══════════════ CALC SEMANA ══════════════════════════════════════════════════
+function calcSem(total, dias, pedagio){
+  const c=DB.cfg;
+  const d=+dias||0;
+  const fixoTotal   = (+c.fixoDia||0)*d;
+  const pedPago     = +pedagio||0;
+  const valPkts     = Math.max(0,(+total||0)-fixoTotal-pedPago);
+  const pkts        = (+c.valorPacote||0.5)>0 ? Math.round(valPkts/(+c.valorPacote||0.5)) : 0;
+  const sobraPed    = (+c.pedagioShopee||0)*d - pedPago;
+  const custoMot    = ((+c.diaria||0)+(+c.valeRefeicaoDia||0))*d;
+  const check       = Math.abs(fixoTotal+pedPago+valPkts-(+total||0))<0.02;
+  return {fixoTotal,pedPago,valPkts,pkts,sobraPed,custoMot,check,d};
+}
+
+// ═══════════════ ALERTS ═══════════════════════════════════════════════════════
+function getAlerts(){
+  const alerts=[], l=DB.cfg.lem||{}, now=new Date(), dow=now.getDay(), dom=now.getDate(), mes=now.getMonth()+1;
+  if(l.nfSeg && dow===1) alerts.push({tp:'a-or',icon:'📄',title:'Emitir Nota Fiscal hoje!',sub:'Segunda-feira: emita e envie a NF da semana anterior (seg→sáb).'});
+  if(l.salario && (dom>=28||dom===1)){ const t=dom===1?'Verifique o pagamento do motorista.':'Faltam poucos dias — prepare o fechamento.'; alerts.push({tp:'a-bl',icon:'💰',title:'Lembrete: Salário do Motorista',sub:t}); }
+  if(l.ipva && mes===+l.ipvaMes) alerts.push({tp:'a-yw',icon:'📋',title:'IPVA vence este mês!',sub:'Providencie o pagamento do IPVA/Licenciamento.'});
+  if(l.seguro && l.seguroVenc){ const venc=new Date(l.seguroVenc+'T12:00:00'), diff=Math.ceil((venc-now)/86400000); if(diff<=30&&diff>=0) alerts.push({tp:'a-rd',icon:'🛡️',title:`Seguro vence em ${diff} dia(s)!`,sub:`Vencimento: ${new Date(l.seguroVenc+'T12:00:00').toLocaleDateString('pt-BR')}`}); }
+  if(l.revisao && l.revisaoUlt){ const ult=new Date(l.revisaoUlt+'T12:00:00'), prox=new Date(ult); prox.setMonth(prox.getMonth()+(+l.revisaoMeses||3)); const diff=Math.ceil((prox-now)/86400000); if(diff<0) alerts.push({tp:'a-rd',icon:'🔧',title:'Revisão atrasada!',sub:`Prevista: ${prox.toLocaleDateString('pt-BR')}`}); else if(diff<=15) alerts.push({tp:'a-yw',icon:'🔧',title:`Revisão em ${diff} dia(s)`,sub:`Próxima: ${prox.toLocaleDateString('pt-BR')}`}); }
+  return alerts;
+}
+
+// ═══════════════ CHART ════════════════════════════════════════════════════════
+function chart(){
+  const vs=Array.from({length:6},(_,i)=>{ const d=new Date(); d.setMonth(d.getMonth()-(5-i)); const k=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); return {label:MN[d.getMonth()],val:DB.semanas.filter(s=>mAStr(s.data)===k).reduce((a,s)=>a+(+s.total||0),0)}; });
+  const max=Math.max(...vs.map(v=>v.val),1);
+  return vs.map((v,i)=>`<div class="cbw"><div class="cb" style="height:${Math.max(4,(v.val/max)*54)}px;opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+}
+
+// ═══════════════ DASHBOARD ════════════════════════════════════════════════════
+function renderDash(){
+  const cx=compute(), al=getAlerts();
+  const pct=cx.recBruta>0?Math.min(100,Math.round((cx.recBruta/cx.proj)*100)):0;
+  const kpis=[
+    {label:'Receita Bruta',  val:R$(cx.recBruta),   color:'var(--gn)', icon:'💰', sub:`${cx.semCont} semana(s) lançada(s)`},
+    {label:'Total Despesas', val:R$(cx.totalDesp),   color:'var(--rd)', icon:'📤', sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}`},
+    {label:'Lucro Líquido',  val:R$(cx.lucro),       color:cx.lucro>=0?'var(--gn)':'var(--rd)', icon:cx.lucro>=0?'✅':'⚠️', sub:'Receita − Despesas'},
+    {label:'Pacotes no Mês', val:(cx.totPacotes||0).toLocaleString('pt-BR'), color:'var(--yw)', icon:'📦', sub:cx.custoPkt>0?`Custo/pct ${R$(cx.custoPkt)}`:'—'},
+  ];
+  const rec=[...DB.semanas].reverse().slice(0,4);
+  return `
+    <div class="sh">
+      <div>
+        <div class="fw8 ff" style="font-size:22px">${mALbl(cx.ma)}</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:2px">Visão geral do mês atual</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn bsm" onclick="openModal('sem')">+ Semana</button>
+        <button class="btn bsm bgh" onclick="openModal('var')">+ Despesa</button>
+      </div>
+    </div>
+    ${al.length?`<div style="margin-bottom:14px"><div class="ct">🔔 Alertas</div>${al.map(a=>`<div class="alrt ${a.tp}"><div class="aicon">${a.icon}</div><div><div class="atitle">${a.title}</div><div class="asub">${a.sub}</div></div></div>`).join('')}</div>`:''}
+    <div class="kg">${kpis.map(k=>`<div class="kpi" style="border-left-color:${k.color}"><div class="ki">${k.icon}</div><div class="kl">${k.label}</div><div class="kv" style="color:${k.color}">${k.val}</div><div class="ks">${k.sub}</div></div>`).join('')}</div>
+    ${cx.semCont>0?`
+    <div class="card">
+      <div class="ct">📈 Projeção do mês</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <div><div style="font-size:11px;color:var(--t2)">Atual</div><div class="fw8 c-gn" style="font-size:15px">${R$(cx.recBruta)}</div></div>
+        <div style="text-align:right"><div style="font-size:11px;color:var(--t2)">Projeção</div><div class="fw8 c-ac" style="font-size:15px">${R$(cx.proj)}</div></div>
+      </div>
+      <div class="pbg"><div class="pfill" style="width:${pct}%"></div></div>
+      <div style="font-size:11px;color:var(--t2)">${pct}% concluído · ${cx.totDias} dias trabalhados · Média ${R$(cx.recBruta/cx.semCont)}/sem</div>
+    </div>`:''}
+    <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chart()}</div></div>
+    <div class="card">
+      <div class="ct">Últimos lançamentos</div>
+      ${rec.length===0?`<div style="text-align:center;padding:12px 0;color:var(--t2);font-size:13px">Nenhum lançamento ainda.</div>`:
+        rec.map(s=>`
+          <div class="row">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">📦 ${(+s.pkts||0).toLocaleString('pt-BR')} pacotes · ${s.dias} dia(s) · ${s.data}</div>
+              <div style="font-size:11px;color:var(--t2)">Fixo ${R$(s.fixoTotal)} · Ped. ${R$(s.pedPago)} · Mot. ${R$(s.custoMot)}</div>
+            </div>
+            <div class="fw8 c-gn" style="font-size:15px;white-space:nowrap">${R$(s.total)}</div>
+          </div>`).join('')}
+    </div>
+    <div class="nfe-box">
+      <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:6px">📄 Emitir Nota Fiscal</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Toda <b>segunda-feira</b>: emita a NF da semana anterior.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://nfe.jundiai.sp.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#fff;background:var(--ac)">🏢 NFS-e Jundiaí ↗</a>
+        <a href="https://www.nfe.fazenda.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:var(--tx);background:var(--s2)">🌐 Portal Federal ↗</a>
+      </div>
+    </div>`;
+}
+
+// ═══════════════ ENTRADAS ═════════════════════════════════════════════════════
+function renderEnt(){
+  const grp=grpBy(DB.semanas), keys=Object.keys(grp);
+  return `
+    <div class="sh"><div class="st">Entradas Shopee</div><button class="btn bsm" onclick="openModal('sem')">+ Nova semana</button></div>
+    ${keys.length===0?empty('Nenhuma entrada lançada ainda.'):keys.map(ma=>{
+      const sems=grp[ma];
+      const tot=sems.reduce((a,s)=>a+(+s.total||0),0);
+      const pks=sems.reduce((a,s)=>a+(+s.pkts||0),0);
+      const dias=sems.reduce((a,s)=>a+(+s.dias||0),0);
+      const sob=sems.reduce((a,s)=>a+(+s.sobraPed||0),0);
+      const mot=sems.reduce((a,s)=>a+(+s.custoMot||0),0);
+      return `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div><span class="fw8 ff" style="font-size:15px">${mALbl(ma)}</span><div style="font-size:11px;color:var(--t2);margin-top:2px">${dias} dias · ${pks.toLocaleString('pt-BR')} pacotes</div></div>
+            <div style="text-align:right">
+              <div class="fw8 c-gn" style="font-size:15px">${R$(tot)}</div>
+              ${sob>0?`<div style="font-size:10px;color:var(--yw)">Sobra ped. ${R$(sob)}</div>`:''}
+              <div style="font-size:10px;color:var(--bl)">Motorista ${R$(mot)}</div>
+            </div>
+          </div>
+          ${sems.map((s,i)=>`
+            <div class="item">
+              <div style="flex:1">
+                <div class="itx">Semana ${i+1} — ${s.data} &nbsp;·&nbsp; <span class="c-ac">${s.dias} dia(s)</span></div>
+                <div class="isb">
+                  📦 ${(+s.pkts||0).toLocaleString('pt-BR')} pacotes &nbsp;·&nbsp; Total ${R$(s.total)}<br>
+                  Fixo ${R$(s.fixoTotal)} · Ped. gasto ${R$(s.pedPago)} · Val.pct ${R$(s.valPkts)}<br>
+                  <span class="c-yw">Sobra ped. ${R$(s.sobraPed)}</span> &nbsp;·&nbsp; <span class="c-bl">Motorista ${R$(s.custoMot)}</span>
+                  ${s.obs?`<br><i>${s.obs}</i>`:''}
+                </div>
+              </div>
+              <button class="del" onclick="delSem('${s.id}')">🗑</button>
+            </div>`).join('')}
+        </div>`;
+    }).join('')}`;
+}
+
+// ═══════════════ DESPESAS ═════════════════════════════════════════════════════
+function renderDesp(){
+  const cx=compute(), c=DB.cfg;
+  const grp=grpBy(DB.variaveis), keys=Object.keys(grp);
+  // Custo motorista por mês
+  const motRows=grpBy(DB.semanas);
+  return `
+    <div class="sh">
+      <div class="st">Despesas</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn bsm" onclick="openModal('var')">+ Variável</button>
+        <button class="btn bsm bgh" onclick="go('cfg')">⚙️ Fixas</button>
+      </div>
+    </div>
+
+    <!-- Motorista por mês -->
+    <div class="card" style="border-left:3px solid var(--bl)">
+      <div class="ct">👤 Custo Motorista (por dias trabalhados)</div>
+      <div class="row"><span class="rl">Diária</span><span class="rv">${R$(c.diaria)}/dia</span></div>
+      <div class="row"><span class="rl">Vale Refeição</span><span class="rv">${R$(c.valeRefeicaoDia)}/dia</span></div>
+      <div class="row"><span class="rl">Custo/dia total</span><span class="rv">${R$((+c.diaria||0)+(+c.valeRefeicaoDia||0))}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px">
+        <span class="fw8" style="font-size:13px">Acumulado este mês</span>
+        <span class="fw8 c-bl" style="font-size:15px">${R$(cx.custoMot)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--t2);margin-top:4px">${cx.totDias} dias trabalhados no mês</div>
+    </div>
+
+    <!-- Fixas -->
+    <div class="card" style="border-left:3px solid var(--rd)">
+      <div class="ct">Despesas Fixas Mensais</div>
+      <div class="row"><span class="rl">Financiamento/Aluguel</span><span class="rv c-rd">${R$(c.financiamento)}</span></div>
+      <div class="row"><span class="rl">Seguro do Veículo</span><span class="rv c-rd">${R$(c.seguro)}</span></div>
+      ${(c.fixasExtras||[]).map(f=>`<div class="row"><span class="rl">${f.nome}</span><span class="rv c-rd">${R$(f.valor)}</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px">
+        <span class="fw8" style="font-size:13px">Total Fixo/mês</span>
+        <span class="fw8 c-rd" style="font-size:15px">${R$(cx.totalFixas)}</span>
+      </div>
+    </div>
+
+    <div class="divider">Despesas Variáveis</div>
+    ${keys.length===0?empty('Nenhuma despesa variável lançada.'):keys.map(ma=>{
+      const vars=grp[ma], tot=vars.reduce((a,v)=>a+(+v.valor||0),0);
+      return `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+            <span class="fw8 ff" style="font-size:15px">${mALbl(ma)}</span>
+            <span class="fw8 c-rd" style="font-size:15px">${R$(tot)}</span>
+          </div>
+          ${vars.map(v=>`
+            <div class="item">
+              <div style="flex:1">
+                <div class="itx">${CATS[v.cat]||'📌'} ${v.cat}</div>
+                <div class="isb">${v.data}${v.obs?' · '+v.obs:''}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-left:8px">
+                <span class="fw8 c-rd">${R$(v.valor)}</span>
+                <button class="del" onclick="delVar('${v.id}')">🗑</button>
+              </div>
+            </div>`).join('')}
+        </div>`;
+    }).join('')}`;
+}
+
+// ═══════════════ CONFIG ═══════════════════════════════════════════════════════
+function renderCfg(){
+  const c=DB.cfg, l=c.lem||{};
+  return `
+    <div class="sh"><div class="st">Configurações</div></div>
+
+    <div class="card">
+      <div class="ct">🚛 Operação Shopee (por dia)</div>
+      <div class="fld"><label class="lbl">Fixo de saída por dia (R$)</label><input class="inp" type="number" id="cf-fixo" value="${c.fixoDia||0}" onchange="scf('fixoDia',this.value)"></div>
+      <div class="fld"><label class="lbl">Pedágio pago pela Shopee por dia (R$)</label><input class="inp" type="number" id="cf-pshop" value="${c.pedagioShopee||0}" onchange="scf('pedagioShopee',this.value)"></div>
+      <div class="fld"><label class="lbl">Valor por pacote (R$) — padrão R$ 0,50</label><input class="inp" type="number" step="0.01" id="cf-pkt" value="${c.valorPacote||0.5}" onchange="scf('valorPacote',this.value)"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">👤 Motorista (por dia trabalhado)</div>
+      <div class="fld"><label class="lbl">Diária do motorista (R$)</label><input class="inp" type="number" id="cf-dia" value="${c.diaria||0}" onchange="scf('diaria',this.value)"></div>
+      <div class="fld"><label class="lbl">Vale refeição por dia (R$)</label><input class="inp" type="number" id="cf-vrd" value="${c.valeRefeicaoDia||0}" onchange="scf('valeRefeicaoDia',this.value)"></div>
+      <div class="fld">
+        <label class="lbl">Forma de pagamento</label>
+        <select class="inp" onchange="scf('pagamentoTipo',this.value);togAdiant(this.value)">
+          <option value="mensal" ${(c.pagamentoTipo||'mensal')==='mensal'?'selected':''}>Mensal (único, final do mês)</option>
+          <option value="quinzenal" ${c.pagamentoTipo==='quinzenal'?'selected':''}>Quinzenal (2× por mês)</option>
+        </select>
+      </div>
+      <div id="wrap-ad" style="${c.pagamentoTipo==='quinzenal'?'':'display:none'}">
+        <div class="fld"><label class="lbl">Adiantamento quinzenal (R$)</label><input class="inp" type="number" value="${c.adiantamento||0}" onchange="scf('adiantamento',this.value)"></div>
+      </div>
+      <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--bl)">
+        💡 O custo do motorista é calculado automaticamente por semana conforme os dias trabalhados.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">🚛 Veículo — Fixas Mensais</div>
+      <div class="fld"><label class="lbl">Financiamento/Aluguel (R$)</label><input class="inp" type="number" value="${c.financiamento||0}" onchange="scf('financiamento',this.value)"></div>
+      <div class="fld"><label class="lbl">Seguro (R$) — deixe 0 se ainda não tem</label><input class="inp" type="number" value="${c.seguro||0}" onchange="scf('seguro',this.value)"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">➕ Outras Despesas Fixas</div>
+      <div id="extras-list">
+        ${(c.fixasExtras||[]).map((f,i)=>`
+          <div class="item">
+            <div style="flex:1"><div class="itx">${f.nome}</div></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="fw8 c-rd">${R$(f.valor)}</span>
+              <button class="del" onclick="remExtra(${i})">🗑</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input class="inp" id="ex-n" placeholder="Nome (ex: Contador)" style="flex:2">
+        <input class="inp" type="number" id="ex-v" placeholder="R$" style="flex:1">
+        <button onclick="addExtra()" style="background:var(--ac);color:#fff;border:none;border-radius:10px;padding:0 14px;cursor:pointer;font-weight:800;font-size:18px">+</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">🔔 Lembretes Automáticos</div>
+
+      <div class="trow">
+        <div><div style="font-size:13px;font-weight:600;color:var(--tx)">📄 NF toda segunda-feira</div><div class="isb">Emitir NF da semana anterior</div></div>
+        <label class="tog"><input type="checkbox" ${l.nfSeg?'checked':''} onchange="sl('nfSeg',this.checked)"><span class="sldr"></span></label>
+      </div>
+      <div class="trow">
+        <div><div style="font-size:13px;font-weight:600;color:var(--tx)">💰 Salário do motorista</div><div class="isb">Alerta na virada do mês</div></div>
+        <label class="tog"><input type="checkbox" ${l.salario?'checked':''} onchange="sl('salario',this.checked)"><span class="sldr"></span></label>
+      </div>
+      <div class="trow" style="flex-wrap:wrap;gap:6px">
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--tx)">📋 IPVA</div><div class="isb">Alerta no mês de vencimento</div></div>
+        <label class="tog"><input type="checkbox" ${l.ipva?'checked':''} onchange="sl('ipva',this.checked)"><span class="sldr"></span></label>
+        <div style="width:100%;margin-top:6px">
+          <label class="lbl">Mês do IPVA</label>
+          <select class="inp" onchange="sl('ipvaMes',+this.value)">
+            ${MF.map((m,i)=>`<option value="${i+1}" ${(+l.ipvaMes===i+1)?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="trow" style="flex-wrap:wrap;gap:6px">
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--tx)">🛡️ Seguro</div><div class="isb">Alerta 30 dias antes do vencimento</div></div>
+        <label class="tog"><input type="checkbox" ${l.seguro?'checked':''} onchange="sl('seguro',this.checked)"><span class="sldr"></span></label>
+        <div style="width:100%;margin-top:6px">
+          <label class="lbl">Data de vencimento do seguro</label>
+          <input class="inp" type="date" value="${l.seguroVenc||''}" onchange="sl('seguroVenc',this.value)">
+        </div>
+      </div>
+      <div class="trow" style="flex-wrap:wrap;gap:6px;border-bottom:none">
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--tx)">🔧 Revisão do Caminhão</div><div class="isb">Alerta 15 dias antes</div></div>
+        <label class="tog"><input type="checkbox" ${l.revisao?'checked':''} onchange="sl('revisao',this.checked)"><span class="sldr"></span></label>
+        <div style="width:100%;margin-top:6px">
+          <div class="inp-row">
+            <div class="fld" style="flex:1"><label class="lbl">Última revisão</label><input class="inp" type="date" value="${l.revisaoUlt||''}" onchange="sl('revisaoUlt',this.value)"></div>
+            <div class="fld" style="flex:1"><label class="lbl">Intervalo (meses)</label><input class="inp" type="number" value="${l.revisaoMeses||3}" onchange="sl('revisaoMeses',+this.value)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="border:1px solid rgba(240,90,40,.3);background:rgba(240,90,40,.05)">
+      <div class="ct" style="color:var(--ac)">💾 Backup dos Dados</div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:14px;line-height:1.6">
+        Salve um arquivo de backup no seu celular para não perder seus dados. Restaure quando precisar.<br>
+        <span style="color:var(--yw);font-weight:600">⚠ Faça backup regularmente!</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" onclick="exportBackup()">💾 Salvar Backup</button>
+        <button class="btn bgh" style="flex:1" onclick="document.getElementById('restore-input').click()">📂 Restaurar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">📄 Relatório para Contador</div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:14px;line-height:1.5">Gera resumo do mês atual — pode imprimir ou salvar como PDF.</div>
+      <button class="btn bgh" onclick="gerarPDF()">📄 Visualizar / Imprimir PDF</button>
+    </div>
+
+    <div class="nfe-box">
+      <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:8px">📄 Portais NF-e</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://nfe.jundiai.sp.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#fff;background:var(--ac)">🏢 NFS-e Jundiaí ↗</a>
+        <a href="https://www.nfe.fazenda.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:var(--tx);background:var(--s2)">🌐 Portal Federal ↗</a>
+      </div>
+    </div>`;
+}
+
+function togAdiant(v){ const el=document.getElementById('wrap-ad'); if(el) el.style.display=v==='quinzenal'?'block':'none'; }
+function scf(f,v){ DB.cfg[f]=isNaN(+v)||v===''?v:+v; save(); }
+function sl(f,v){ if(!DB.cfg.lem) DB.cfg.lem={}; DB.cfg.lem[f]=v; save(); }
+
+function addExtra(){
+  const n=document.getElementById('ex-n')?.value.trim(), v=document.getElementById('ex-v')?.value;
+  if(!n||!v) return;
+  if(!DB.cfg.fixasExtras) DB.cfg.fixasExtras=[];
+  DB.cfg.fixasExtras.push({nome:n,valor:+v}); save(); refreshExtras();
+  document.getElementById('ex-n').value=''; document.getElementById('ex-v').value='';
+}
+function remExtra(i){ DB.cfg.fixasExtras.splice(i,1); save(); refreshExtras(); }
+function refreshExtras(){
+  const el=document.getElementById('extras-list'); if(!el) return;
+  el.innerHTML=(DB.cfg.fixasExtras||[]).map((f,i)=>`
+    <div class="item"><div style="flex:1"><div class="itx">${f.nome}</div></div>
+    <div style="display:flex;align-items:center;gap:8px"><span class="fw8 c-rd">${R$(f.valor)}</span>
+    <button class="del" onclick="remExtra(${i})">🗑</button></div></div>`).join('');
+}
+
+// ═══════════════ MODAL SEMANA ═════════════════════════════════════════════════
+let selDias=5;
+function openModal(t){ const mi=document.getElementById('mi'); selDias=5; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); document.getElementById('ov').classList.add('open'); }
+function closeModal(){ document.getElementById('ov').classList.remove('open'); }
+
+function modalSem(){
+  const c=DB.cfg;
+  const dias=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+  return `
+    <div class="mh"><span class="mt">Lançar Semana</span><button class="mc" onclick="closeModal()">×</button></div>
+
+    <div class="fld">
+      <label class="lbl">Data de fechamento da semana (último dia)</label>
+      <input class="inp" type="date" id="ms-data" value="${today()}">
+    </div>
+
+    <div class="fld">
+      <label class="lbl">Dias trabalhados nesta semana</label>
+      <div class="days-pick">
+        ${dias.map((d,i)=>`<button class="day-btn${i<5?' on':''}" id="day-${i}" onclick="togDay(${i})">${d}</button>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--t2);margin-top:8px;text-align:center">
+        <span id="dias-count" class="fw8 c-ac">5 dias</span> trabalhados
+        &nbsp;·&nbsp; Fixo <span id="dias-fixo" class="c-gn fw8">${R$((c.fixoDia||0)*5)}</span>
+        &nbsp;·&nbsp; Motorista <span id="dias-mot" class="c-bl fw8">${R$(((c.diaria||0)+(c.valeRefeicaoDia||0))*5)}</span>
+      </div>
+    </div>
+
+    <div class="fld">
+      <label class="lbl">Pedágio total gasto na semana (R$)</label>
+      <input class="inp" type="number" id="ms-ped" placeholder="Ex: 145,00" oninput="prevSem()">
+    </div>
+
+    <div class="fld">
+      <label class="lbl">Valor total recebido da Shopee (R$)</label>
+      <input class="inp" type="number" id="ms-tot" placeholder="Copie do app da Shopee" style="font-size:18px;font-weight:700" oninput="prevSem()">
+    </div>
+
+    <div id="ms-prev" style="display:none">
+      <div class="cbox">
+        <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Cálculo automático</div>
+        <div class="crow"><span>Total recebido</span><b id="pv-tot"></b></div>
+        <div class="crow"><span>− Fixo de saída (<span id="pv-dias-txt"></span> dias)</span><span id="pv-fixo" class="c-rd"></span></div>
+        <div class="crow"><span>− Pedágio gasto</span><span id="pv-ped" class="c-rd"></span></div>
+        <div class="crow ctot"><span>= Valor dos pacotes</span><span id="pv-vpkt" class="c-gn"></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
+          <div class="crow"><span>📦 Pacotes coletados</span><span id="pv-pkts" class="fw8 c-ac" style="font-size:16px"></span></div>
+          <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob" class="fw8 c-yw"></span></div>
+          <div class="crow"><span>👤 Custo motorista</span><span id="pv-mot" class="fw8 c-bl"></span></div>
+        </div>
+        <div id="pv-chk" style="margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px"></div>
+      </div>
+    </div>
+
+    <div class="fld"><label class="lbl">Observações (opcional)</label><input class="inp" id="ms-obs" placeholder="Ex: semana de alto volume"></div>
+    <button class="btn" onclick="saveSem()">✅ Salvar semana</button>`;
+}
+
+function togDay(i){
+  const btn=document.getElementById('day-'+i); if(!btn) return;
+  btn.classList.toggle('on');
+  selDias=document.querySelectorAll('.day-btn.on').length;
+  const c=DB.cfg;
+  const dEl=document.getElementById('dias-count'); if(dEl) dEl.textContent=selDias+' dia'+(selDias!==1?'s':'');
+  const fEl=document.getElementById('dias-fixo');  if(fEl) fEl.textContent=R$((c.fixoDia||0)*selDias);
+  const mEl=document.getElementById('dias-mot');   if(mEl) mEl.textContent=R$(((c.diaria||0)+(c.valeRefeicaoDia||0))*selDias);
+  prevSem();
+}
+
+function prevSem(){
+  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const ped=parseFloat(document.getElementById('ms-ped')?.value)||0;
+  const pv=document.getElementById('ms-prev'); if(!pv) return;
+  if(tot<=0){ pv.style.display='none'; return; }
+  pv.style.display='block';
+  const cx=calcSem(tot,selDias,ped);
+  document.getElementById('pv-tot').textContent      = R$(tot);
+  document.getElementById('pv-dias-txt').textContent = selDias;
+  document.getElementById('pv-fixo').textContent     = '− '+R$(cx.fixoTotal);
+  document.getElementById('pv-ped').textContent      = '− '+R$(cx.pedPago);
+  document.getElementById('pv-vpkt').textContent     = R$(cx.valPkts);
+  document.getElementById('pv-pkts').textContent     = cx.pkts.toLocaleString('pt-BR')+' pacotes';
+  document.getElementById('pv-sob').textContent      = R$(cx.sobraPed);
+  document.getElementById('pv-mot').textContent      = R$(cx.custoMot);
+  const chk=document.getElementById('pv-chk');
+  if(cx.check){
+    chk.textContent='✔ Conta fechando corretamente';
+    chk.style.cssText='margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:rgba(52,211,153,.1);color:var(--gn)';
+  } else {
+    chk.textContent='⚠ Verifique: a soma não fecha com o total';
+    chk.style.cssText='margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:rgba(244,63,94,.1);color:var(--rd)';
+  }
+}
+
+function saveSem(){
+  const tot  = parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const ped  = parseFloat(document.getElementById('ms-ped')?.value)||0;
+  const data = document.getElementById('ms-data')?.value;
+  const obs  = document.getElementById('ms-obs')?.value||'';
+  if(!tot){ alert('Informe o valor total recebido.'); return; }
+  if(selDias===0){ alert('Selecione ao menos um dia trabalhado.'); return; }
+  const cx=calcSem(tot,selDias,ped);
+  DB.semanas.push({ id:uid(), data, total:tot, dias:selDias, pedPago:cx.pedPago, fixoTotal:cx.fixoTotal, valPkts:cx.valPkts, pkts:cx.pkts, sobraPed:cx.sobraPed, custoMot:cx.custoMot, obs });
+  save(); closeModal(); render();
+}
+
+// ═══════════════ MODAL VARIAVEL ═══════════════════════════════════════════════
+function modalVar(){
+  return `
+    <div class="mh"><span class="mt">Nova Despesa Variável</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div class="fld">
+      <label class="lbl">Categoria</label>
+      <select class="inp" id="mv-cat" onchange="chkNovaCat()">
+        ${Object.keys(CATS).map(c=>`<option>${c}</option>`).join('')}
+        <option value="__nova">➕ Nova categoria...</option>
+      </select>
+    </div>
+    <div id="mv-nw" style="display:none"><div class="fld"><label class="lbl">Nome da nova categoria</label><input class="inp" id="mv-nova" placeholder="Ex: Lavagem"></div></div>
+    <div class="fld"><label class="lbl">Data</label><input class="inp" type="date" id="mv-data" value="${today()}"></div>
+    <div class="fld"><label class="lbl">Valor (R$)</label><input class="inp" type="number" id="mv-val" placeholder="Ex: 250,00"></div>
+    <div class="fld"><label class="lbl">Observações</label><input class="inp" id="mv-obs" placeholder="Ex: troca de óleo"></div>
+    <button class="btn brd" onclick="saveVar()">💸 Salvar despesa</button>`;
+}
+function chkNovaCat(){ const v=document.getElementById('mv-cat')?.value; const el=document.getElementById('mv-nw'); if(el) el.style.display=v==='__nova'?'block':'none'; }
+function saveVar(){
+  const catSel=document.getElementById('mv-cat')?.value;
+  const cat=catSel==='__nova'?(document.getElementById('mv-nova')?.value||'Outros'):catSel;
+  const data=document.getElementById('mv-data')?.value;
+  const val=document.getElementById('mv-val')?.value;
+  const obs=document.getElementById('mv-obs')?.value||'';
+  if(!val){ alert('Informe o valor.'); return; }
+  DB.variaveis.push({id:uid(),data,cat,valor:+val,obs}); save(); closeModal(); render();
+}
+
+// ═══════════════ DELETE ═══════════════════════════════════════════════════════
+function delSem(id){ if(!confirm('Excluir este lançamento?')) return; DB.semanas=DB.semanas.filter(s=>s.id!==id); save(); render(); }
+function delVar(id){ if(!confirm('Excluir esta despesa?')) return; DB.variaveis=DB.variaveis.filter(v=>v.id!==id); save(); render(); }
+
+// ═══════════════ BACKUP ═══════════════════════════════════════════════════════
+function exportBackup(){
+  const json = JSON.stringify(DB, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `shopee-vuc-backup-${date}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('✅ Backup salvo com sucesso!');
+}
+function importBackup(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed.semanas && !parsed.variaveis) throw new Error('Arquivo inválido');
+      if(!confirm('Isso vai substituir todos os dados atuais pelo backup. Confirma?')) return;
+      const def = defDB();
+      DB = { cfg:{...def.cfg,...parsed.cfg, lem:{...def.cfg.lem,...(parsed.cfg?.lem||{})}}, semanas:parsed.semanas||[], variaveis:parsed.variaveis||[] };
+      save(); applyTheme(); render();
+      showToast('✅ Backup restaurado com sucesso!');
+    } catch(err){ alert('Erro ao ler o arquivo. Verifique se é um backup válido.'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+function showToast(msg){
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1c1f27;color:#eef0f4;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;border:1px solid #272b36;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2500);
+}
+
+// ═══════════════ PDF ══════════════════════════════════════════════════════════
+function gerarPDF(){
+  const cx=compute(), c=DB.cfg, win=window.open('','_blank');
+  const sRows=cx.semMes.map((s,i)=>`<tr><td>Sem. ${i+1}</td><td>${s.data}</td><td>${s.dias}d</td><td>${(+s.pkts||0).toLocaleString('pt-BR')}</td><td>${R$(s.fixoTotal)}</td><td>${R$(s.pedPago)}</td><td>${R$(s.valPkts)}</td><td>${R$(s.custoMot)}</td><td><b>${R$(s.total)}</b></td></tr>`).join('');
+  const vRows=cx.varMes.map(v=>`<tr><td>${CATS[v.cat]||'📌'} ${v.cat}</td><td>${v.data}</td><td colspan="6">${v.obs||'—'}</td><td><b style="color:#e11d48">${R$(v.valor)}</b></td></tr>`).join('');
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório ${mALbl(cx.ma)}</title>
+  <style>
+    body{font-family:sans-serif;padding:24px;color:#1a202c;max-width:900px;margin:0 auto;font-size:13px}
+    h1{color:#f05a28;font-size:20px;margin-bottom:2px}h2{color:#64748b;font-size:13px;margin-bottom:20px;font-weight:400}
+    h3{font-size:14px;margin:20px 0 8px}
+    .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+    .kbox{flex:1;min-width:120px;background:#f8fafc;border-radius:10px;padding:12px;border:1px solid #e2e8f0}
+    .klbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}.kval{font-size:18px;font-weight:800;margin-top:4px}
+    .gn{color:#16a34a}.rd{color:#e11d48}.ac{color:#f05a28}.bl{color:#2563eb}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}
+    th{background:#f0f4f8;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+    td{padding:7px 8px;border-bottom:1px solid #e2e8f0}
+    @media print{button{display:none}}
+  </style></head><body>
+  <h1>🚛 Gestão Shopee VUC — Relatório Mensal</h1>
+  <h2>${mALbl(cx.ma)} · Jundiaí/SP · ${cx.totDias} dias trabalhados</h2>
+  <div class="kpis">
+    <div class="kbox"><div class="klbl">Receita Bruta</div><div class="kval gn">${R$(cx.recBruta)}</div></div>
+    <div class="kbox"><div class="klbl">Custo Motorista</div><div class="kval bl">${R$(cx.custoMot)}</div></div>
+    <div class="kbox"><div class="klbl">Despesas Fixas</div><div class="kval rd">${R$(cx.totalFixas)}</div></div>
+    <div class="kbox"><div class="klbl">Desp. Variáveis</div><div class="kval rd">${R$(cx.totalVar)}</div></div>
+    <div class="kbox"><div class="klbl">Total Despesas</div><div class="kval rd">${R$(cx.totalDesp)}</div></div>
+    <div class="kbox"><div class="klbl">Lucro Líquido</div><div class="kval ${cx.lucro>=0?'gn':'rd'}">${R$(cx.lucro)}</div></div>
+    <div class="kbox"><div class="klbl">Pacotes</div><div class="kval ac">${(cx.totPacotes||0).toLocaleString('pt-BR')}</div></div>
+  </div>
+  <h3>Entradas Semanais</h3>
+  <table><thead><tr><th>#</th><th>Data</th><th>Dias</th><th>Pacotes</th><th>Fixo</th><th>Pedágio</th><th>Val.Pkts</th><th>Motorista</th><th>Total</th></tr></thead>
+  <tbody>${sRows||'<tr><td colspan="9">Nenhum lançamento.</td></tr>'}</tbody></table>
+  <h3>Despesas Variáveis</h3>
+  <table><thead><tr><th>Categoria</th><th>Data</th><th colspan="6">Obs</th><th>Valor</th></tr></thead>
+  <tbody>${vRows||'<tr><td colspan="9">Nenhuma.</td></tr>'}</tbody></table>
+  <h3>Despesas Fixas Mensais</h3>
+  <table><thead><tr><th>Item</th><th colspan="7"></th><th>Valor</th></tr></thead><tbody>
+    <tr><td>Financiamento/Aluguel</td><td colspan="7"></td><td>${R$(c.financiamento)}</td></tr>
+    <tr><td>Seguro</td><td colspan="7"></td><td>${R$(c.seguro)}</td></tr>
+    ${(c.fixasExtras||[]).map(f=>`<tr><td>${f.nome}</td><td colspan="7"></td><td>${R$(f.valor)}</td></tr>`).join('')}
+    <tr style="font-weight:800"><td>TOTAL</td><td colspan="7"></td><td style="color:#e11d48">${R$(cx.totalFixas)}</td></tr>
+  </tbody></table>
+  <button onclick="window.print()" style="background:#f05a28;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">🖨️ Imprimir / Salvar PDF</button>
+  </body></html>`);
+  win.document.close();
+}
+
+// ═══════════════ RENDER ═══════════════════════════════════════════════════════
+function empty(t){ return `<div class="empty"><div style="font-size:44px;margin-bottom:10px">📭</div><p style="font-size:14px">${t}</p></div>`; }
+
+function render(){
+  const c=document.getElementById('cnt');
+  if(TAB==='dash') c.innerHTML=renderDash();
+  if(TAB==='ent')  c.innerHTML=renderEnt();
+  if(TAB==='desp') c.innerHTML=renderDesp();
+  if(TAB==='cfg')  c.innerHTML=renderCfg();
+}
+render();
+</script>
+</body>
+</html>
