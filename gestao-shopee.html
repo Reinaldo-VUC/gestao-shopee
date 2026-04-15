@@ -300,11 +300,16 @@ function getAlerts(){
   return alerts;
 }
 
-// ═══════════════ CHART ════════════════════════════════════════════════════════
-function chart(){
+// ═══════════════ CHARTS ═══════════════════════════════════════════════════════
+function chartReceita(){
   const vs=Array.from({length:6},(_,i)=>{ const d=new Date(); d.setMonth(d.getMonth()-(5-i)); const k=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); return {label:MN[d.getMonth()],val:DB.semanas.filter(s=>mAStr(s.data)===k).reduce((a,s)=>a+(+s.total||0),0)}; });
   const max=Math.max(...vs.map(v=>v.val),1);
   return vs.map((v,i)=>`<div class="cbw"><div class="cb" style="height:${Math.max(4,(v.val/max)*54)}px;opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+}
+function chartPacotes(){
+  const vs=Array.from({length:6},(_,i)=>{ const d=new Date(); d.setMonth(d.getMonth()-(5-i)); const k=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); return {label:MN[d.getMonth()],val:DB.semanas.filter(s=>mAStr(s.data)===k).reduce((a,s)=>a+(+s.pkts||0),0)}; });
+  const max=Math.max(...vs.map(v=>v.val),1);
+  return vs.map((v,i)=>`<div class="cbw"><div style="font-size:8px;color:var(--yw);margin-bottom:2px;text-align:center;min-height:10px">${v.val>0?(v.val>999?(v.val/1000).toFixed(1)+'k':v.val):''}</div><div class="cb" style="height:${Math.max(4,(v.val/max)*46)}px;background:var(--yw);opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
 }
 
 // ═══════════════ DASHBOARD ════════════════════════════════════════════════════
@@ -315,7 +320,7 @@ function renderDash(){
     {label:'Receita Bruta',  val:R$(cx.recBruta),   color:'var(--gn)', icon:'💰', sub:`${cx.semCont} semana(s) lançada(s)`},
     {label:'Total Despesas', val:R$(cx.totalDesp),   color:'var(--rd)', icon:'📤', sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}`},
     {label:'Lucro Líquido',  val:R$(cx.lucro),       color:cx.lucro>=0?'var(--gn)':'var(--rd)', icon:cx.lucro>=0?'✅':'⚠️', sub:'Receita − Despesas'},
-    {label:'Pacotes no Mês', val:(cx.totPacotes||0).toLocaleString('pt-BR'), color:'var(--yw)', icon:'📦', sub:cx.custoPkt>0?`Custo/pct ${R$(cx.custoPkt)}`:'—'},
+    {label:'Pacotes no Mês', val:(cx.totPacotes||0).toLocaleString('pt-BR')+' un', color:'var(--yw)', icon:'📦', sub:R$(cx.totPacotes*0.5)+' em receita de pacotes'},
   ];
   const rec=[...DB.semanas].reverse().slice(0,4);
   return `
@@ -341,7 +346,8 @@ function renderDash(){
       <div class="pbg"><div class="pfill" style="width:${pct}%"></div></div>
       <div style="font-size:11px;color:var(--t2)">${pct}% concluído · ${cx.totDias} dias trabalhados · Média ${R$(cx.recBruta/cx.semCont)}/sem</div>
     </div>`:''}
-    <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chart()}</div></div>
+    <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chartReceita()}</div></div>
+    <div class="card"><div class="ct">📦 Pacotes coletados · Últimos 6 meses</div><div class="chw" style="height:70px">${chartPacotes()}</div></div>
     <div class="card">
       <div class="ct">Últimos lançamentos</div>
       ${rec.length===0?`<div style="text-align:center;padding:12px 0;color:var(--t2);font-size:13px">Nenhum lançamento ainda.</div>`:
@@ -397,6 +403,7 @@ function renderEnt(){
                   ${s.obs?`<br><i>${s.obs}</i>`:''}
                 </div>
               </div>
+              <button onclick="editSem('${s.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--bl);padding:4px;flex-shrink:0">✏️</button>
               <button class="del" onclick="delSem('${s.id}')">🗑</button>
             </div>`).join('')}
         </div>`;
@@ -641,8 +648,9 @@ function modalSem(){
     </div>
 
     <div class="fld">
-      <label class="lbl">Pedágio total gasto na semana (R$)</label>
-      <input class="inp" type="number" id="ms-ped" placeholder="Ex: 145,00" oninput="prevSem()">
+      <label class="lbl">Pedágio gasto por dia (R$)</label>
+      <input class="inp" type="number" id="ms-ped-dia" placeholder="Ex: 29,00" oninput="prevSem()" value="${c.pedagioDia||0}">
+      <div style="font-size:11px;color:var(--t2);margin-top:5px">Total = valor/dia × dias trabalhados — calculado automaticamente ✓</div>
     </div>
 
     <div class="fld">
@@ -683,7 +691,8 @@ function togDay(i){
 
 function prevSem(){
   const tot=parseFloat(document.getElementById('ms-tot')?.value)||0;
-  const ped=parseFloat(document.getElementById('ms-ped')?.value)||0;
+  const pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0;
+  const ped=pedDia*selDias;
   const pv=document.getElementById('ms-prev'); if(!pv) return;
   if(tot<=0){ pv.style.display='none'; return; }
   pv.style.display='block';
@@ -691,7 +700,7 @@ function prevSem(){
   document.getElementById('pv-tot').textContent      = R$(tot);
   document.getElementById('pv-dias-txt').textContent = selDias;
   document.getElementById('pv-fixo').textContent     = '− '+R$(cx.fixoTotal);
-  document.getElementById('pv-ped').textContent      = '− '+R$(cx.pedPago);
+  document.getElementById('pv-ped').textContent      = '− '+R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
   document.getElementById('pv-vpkt').textContent     = R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent     = cx.pkts.toLocaleString('pt-BR')+' pacotes';
   document.getElementById('pv-sob').textContent      = R$(cx.sobraPed);
@@ -707,14 +716,15 @@ function prevSem(){
 }
 
 function saveSem(){
-  const tot  = parseFloat(document.getElementById('ms-tot')?.value)||0;
-  const ped  = parseFloat(document.getElementById('ms-ped')?.value)||0;
-  const data = document.getElementById('ms-data')?.value;
-  const obs  = document.getElementById('ms-obs')?.value||'';
+  const tot    = parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const pedDia = parseFloat(document.getElementById('ms-ped-dia')?.value)||0;
+  const ped    = pedDia*selDias;
+  const data   = document.getElementById('ms-data')?.value;
+  const obs    = document.getElementById('ms-obs')?.value||'';
   if(!tot){ alert('Informe o valor total recebido.'); return; }
   if(selDias===0){ alert('Selecione ao menos um dia trabalhado.'); return; }
   const cx=calcSem(tot,selDias,ped);
-  DB.semanas.push({ id:uid(), data, total:tot, dias:selDias, pedPago:cx.pedPago, fixoTotal:cx.fixoTotal, valPkts:cx.valPkts, pkts:cx.pkts, sobraPed:cx.sobraPed, custoMot:cx.custoMot, obs });
+  DB.semanas.push({ id:uid(), data, total:tot, dias:selDias, pedDia, pedPago:cx.pedPago, fixoTotal:cx.fixoTotal, valPkts:cx.valPkts, pkts:cx.pkts, sobraPed:cx.sobraPed, custoMot:cx.custoMot, obs });
   save(); closeModal(); render();
 }
 
@@ -748,6 +758,67 @@ function saveVar(){
 
 // ═══════════════ DELETE ═══════════════════════════════════════════════════════
 function delSem(id){ if(!confirm('Excluir este lançamento?')) return; DB.semanas=DB.semanas.filter(s=>s.id!==id); save(); render(); }
+function editSem(id){
+  const s=DB.semanas.find(x=>x.id===id); if(!s) return;
+  const mi=document.getElementById('mi');
+  const dias=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+  selDias=s.dias||5;
+  const pedDia=s.pedDia||(s.dias>0?Math.round(s.pedPago/s.dias):0);
+  mi.innerHTML=`
+    <div class="mh"><span class="mt">Editar Semana</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div class="fld"><label class="lbl">Data de fechamento</label><input class="inp" type="date" id="ms-data" value="${s.data}"></div>
+    <div class="fld">
+      <label class="lbl">Dias trabalhados</label>
+      <div class="days-pick">
+        ${dias.map((d,i)=>`<button class="day-btn${i<selDias?' on':''}" id="day-${i}" onclick="togDay(${i})">${d}</button>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--t2);margin-top:8px;text-align:center">
+        <span id="dias-count" class="fw8 c-ac">${selDias} dias</span> trabalhados
+        &nbsp;·&nbsp; Fixo <span id="dias-fixo" class="c-gn fw8">${R$((DB.cfg.fixoDia||0)*selDias)}</span>
+        &nbsp;·&nbsp; Motorista <span id="dias-mot" class="c-bl fw8">${R$(((DB.cfg.diaria||0)+(DB.cfg.valeRefeicaoDia||0))*selDias)}</span>
+      </div>
+    </div>
+    <div class="fld">
+      <label class="lbl">Pedágio gasto por dia (R$)</label>
+      <input class="inp" type="number" id="ms-ped-dia" value="${pedDia}" oninput="prevSem()">
+      <div style="font-size:11px;color:var(--t2);margin-top:5px">Total = valor/dia × dias trabalhados ✓</div>
+    </div>
+    <div class="fld">
+      <label class="lbl">Valor total recebido da Shopee (R$)</label>
+      <input class="inp" type="number" id="ms-tot" value="${s.total}" style="font-size:18px;font-weight:700" oninput="prevSem()">
+    </div>
+    <div id="ms-prev" style="display:none">
+      <div class="cbox">
+        <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Cálculo automático</div>
+        <div class="crow"><span>Total recebido</span><b id="pv-tot"></b></div>
+        <div class="crow"><span>− Fixo de saída (<span id="pv-dias-txt"></span> dias)</span><span id="pv-fixo" class="c-rd"></span></div>
+        <div class="crow"><span>− Pedágio gasto</span><span id="pv-ped" class="c-rd"></span></div>
+        <div class="crow ctot"><span>= Valor dos pacotes</span><span id="pv-vpkt" class="c-gn"></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
+          <div class="crow"><span>📦 Pacotes coletados</span><span id="pv-pkts" class="fw8 c-ac" style="font-size:16px"></span></div>
+          <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob" class="fw8 c-yw"></span></div>
+          <div class="crow"><span>👤 Custo motorista</span><span id="pv-mot" class="fw8 c-bl"></span></div>
+        </div>
+        <div id="pv-chk" style="margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px"></div>
+      </div>
+    </div>
+    <div class="fld"><label class="lbl">Observações</label><input class="inp" id="ms-obs" value="${s.obs||''}"></div>
+    <button class="btn" onclick="updateSem('${id}')">💾 Salvar alterações</button>`;
+  document.getElementById('ov').classList.add('open');
+  setTimeout(prevSem,50);
+}
+function updateSem(id){
+  const tot    = parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const pedDia = parseFloat(document.getElementById('ms-ped-dia')?.value)||0;
+  const ped    = pedDia*selDias;
+  const data   = document.getElementById('ms-data')?.value;
+  const obs    = document.getElementById('ms-obs')?.value||'';
+  if(!tot){ alert('Informe o valor total recebido.'); return; }
+  const cx=calcSem(tot,selDias,ped);
+  const idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0) return;
+  DB.semanas[idx]={ id, data, total:tot, dias:selDias, pedDia, pedPago:cx.pedPago, fixoTotal:cx.fixoTotal, valPkts:cx.valPkts, pkts:cx.pkts, sobraPed:cx.sobraPed, custoMot:cx.custoMot, obs };
+  save(); closeModal(); render(); showToast('✅ Lançamento atualizado!');
+}
 function delVar(id){ if(!confirm('Excluir esta despesa?')) return; DB.variaveis=DB.variaveis.filter(v=>v.id!==id); save(); render(); }
 
 // ═══════════════ BACKUP ═══════════════════════════════════════════════════════
