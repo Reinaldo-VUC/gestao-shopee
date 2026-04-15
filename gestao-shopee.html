@@ -333,7 +333,7 @@ onAuthStateChanged(auth, user => {
     const av = document.getElementById('sb-avatar');
     if(user.photoURL){ av.innerHTML=`<img src="${user.photoURL}" alt="">`; }
     else { av.textContent = (user.displayName||'U')[0].toUpperCase(); }
-    applyTheme();
+    if(window.applyTheme) window.applyTheme();
     subscribeData(user.uid);
   } else {
     currentUser = null;
@@ -355,8 +355,8 @@ function subscribeData(uid){
       DB.cfg       = { ...defCfg(), ...remote.cfg, lem:{...defCfg().lem,...(remote.cfg?.lem||{})} };
     }
     setSyncState('ok');
-    applyTheme();
-    render();
+    if(window.applyTheme) window.applyTheme();
+    if(window.render) window.render();
   }, err => { setSyncState('error'); console.error(err); });
 }
 
@@ -402,8 +402,8 @@ function grpBy(arr){ const g={}; [...arr].reverse().forEach(x=>{ const k=mAStr(x
 function save(){ if(window.saveDB) window.saveDB(); }
 
 // ═══════════ THEME ════════════════════════════════════════════════
-function applyTheme(){ document.body.classList.toggle('light',DB.cfg.tema==='light'); const b=document.getElementById('tbtn-mob'); if(b) b.textContent=DB.cfg.tema==='dark'?'☀️':'🌙'; }
-window.toggleTheme=()=>{ DB.cfg.tema=DB.cfg.tema==='dark'?'light':'dark'; save(); applyTheme(); };
+window.applyTheme=function(){ document.body.classList.toggle('light',DB.cfg.tema==='light'); const b=document.getElementById('tbtn-mob'); if(b) b.textContent=DB.cfg.tema==='dark'?'☀️':'🌙'; }
+window.toggleTheme=()=>{ DB.cfg.tema=DB.cfg.tema==='dark'?'light':'dark'; save(); window.applyTheme(); };
 
 // ═══════════ TABS ═════════════════════════════════════════════════
 let TAB='dash';
@@ -708,7 +708,7 @@ window.exportBackup=()=>{
 window.importBackup=input=>{
   const file=input.files[0]; if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{ try{ const p=JSON.parse(e.target.result); if(!p.semanas&&!p.variaveis)throw new Error(); if(!confirm('Substituir dados atuais pelo backup?'))return; DB={cfg:{...defCfg(),...p.cfg,lem:{...defCfg().lem,...(p.cfg?.lem||{})}},semanas:p.semanas||[],variaveis:p.variaveis||}; save(); applyTheme(); render(); showToast('✅ Backup restaurado!'); }catch(e){alert('Arquivo inválido.');} };
+  reader.onload=e=>{ try{ const p=JSON.parse(e.target.result); if(!p.semanas&&!p.variaveis)throw new Error(); if(!confirm('Substituir dados atuais pelo backup?'))return; DB={cfg:{...defCfg(),...p.cfg,lem:{...defCfg().lem,...(p.cfg?.lem||{})}},semanas:p.semanas||[],variaveis:p.variaveis||[]}; save(); applyTheme(); render(); showToast('✅ Backup restaurado!'); }catch(e){alert('Arquivo inválido.');} };
   reader.readAsText(file); input.value='';
 };
 
@@ -732,7 +732,7 @@ function showToast(msg){ const t=document.createElement('div'); t.textContent=ms
 
 // ═══════════ RENDER ═══════════════════════════════════════════════
 function empty(t){ return `<div class="empty"><div style="font-size:44px;margin-bottom:10px">📭</div><p style="font-size:14px">${t}</p></div>`; }
-function render(){
+window.render=function render(){
   const c=document.getElementById('cnt'); if(!c)return;
   if(TAB==='dash') c.innerHTML=renderDash();
   if(TAB==='ent')  c.innerHTML=renderEnt();
