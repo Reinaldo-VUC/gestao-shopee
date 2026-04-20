@@ -430,10 +430,16 @@ function compute(ma){
   return {ma,semMes,varMes,recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,custoPkt,semCont,proj};
 }
 function calcSem(total,dias,pedagio){
-  const c=DB.cfg, d=+dias||0, fixoTotal=(+c.fixoDia||0)*d, pedPago=+pedagio||0;
-  const valPkts=Math.max(0,(+total||0)-fixoTotal-pedPago), pkts=(+c.valorPacote||0.5)>0?Math.round(valPkts/(+c.valorPacote||0.5)):0;
-  const sobraPed=(+c.pedagioShopee||0)*d-pedPago, custoMot=((+c.diaria||0)+(+c.valeRefeicaoDia||0))*d;
-  return {fixoTotal,pedPago,valPkts,pkts,sobraPed,custoMot,check:Math.abs(fixoTotal+pedPago+valPkts-(+total||0))<0.02};
+  const c=DB.cfg, d=+dias||0;
+  const fixoTotal  = (+c.fixoDia||0)*d;
+  const pedShopee  = (+c.pedagioShopee||0)*d;
+  const pedPago    = +pedagio||0;
+  const valPkts    = Math.max(0,(+total||0)-fixoTotal-pedShopee);
+  const pkts       = (+c.valorPacote||0.5)>0?Math.round(valPkts/(+c.valorPacote||0.5)):0;
+  const sobraPed   = pedShopee - pedPago;
+  const custoMot   = ((+c.diaria||0)+(+c.valeRefeicaoDia||0))*d;
+  const check      = Math.abs(fixoTotal+pedShopee+valPkts-(+total||0))<0.02;
+  return {fixoTotal,pedShopee,pedPago,valPkts,pkts,sobraPed,custoMot,check};
 }
 
 // ═══════════ ALERTS ═══════════════════════════════════════════════
@@ -616,8 +622,12 @@ function modalSem(s){
         <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Cálculo automático</div>
         <div class="crow"><span>Total recebido</span><b id="pv-tot"></b></div>
         <div class="crow"><span>− Fixo de saída (<span id="pv-dias-txt"></span> dias)</span><span id="pv-fixo" class="c-rd"></span></div>
-        <div class="crow"><span>− Pedágio gasto</span><span id="pv-ped" class="c-rd"></span></div>
+        <div class="crow"><span>− Pedágio Shopee (<span id="pv-dias-txt2"></span>)</span><span id="pv-ped" class="c-rd"></span></div>
         <div class="crow ctot"><span>= Valor dos pacotes</span><span id="pv-vpkt" class="c-gn"></span></div>
+        <div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2)">
+          <div class="crow" style="padding:2px 0"><span style="font-size:12px;color:var(--yw)">Pedágio que você gastou</span><span id="pv-ped-gasto" class="fw8" style="color:var(--yw)"></span></div>
+          <div class="crow" style="padding:2px 0"><span style="font-size:12px;color:var(--yw)">💛 Sobra de pedágio</span><span id="pv-sob" class="fw8 c-yw"></span></div>
+        </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
           <div class="crow"><span>📦 Pacotes coletados</span><span id="pv-pkts" class="fw8 c-ac" style="font-size:16px"></span></div>
           <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob" class="fw8 c-yw"></span></div>
@@ -647,11 +657,14 @@ function prevSem(){
   const cx=calcSem(tot,selDias,ped);
   document.getElementById('pv-tot').textContent=R$(tot);
   document.getElementById('pv-dias-txt').textContent=selDias;
+  const dt2=document.getElementById('pv-dias-txt2'); if(dt2) dt2.textContent=selDias+'d';
   document.getElementById('pv-fixo').textContent='− '+R$(cx.fixoTotal);
-  document.getElementById('pv-ped').textContent='− '+R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
+  document.getElementById('pv-ped').textContent='− '+R$(cx.pedShopee)+' (Shopee: '+selDias+'d × '+R$(DB.cfg.pedagioShopee||0)+')';
+  document.getElementById('pv-ped-gasto').textContent=R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
   document.getElementById('pv-vpkt').textContent=R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent=cx.pkts.toLocaleString('pt-BR')+' pacotes';
   document.getElementById('pv-sob').textContent=R$(cx.sobraPed);
+  // sob already set
   document.getElementById('pv-mot').textContent=R$(cx.custoMot);
   const chk=document.getElementById('pv-chk');
   chk.textContent=cx.check?'✔ Conta fechando corretamente':'⚠ Verifique: a soma não fecha com o total';
@@ -663,7 +676,7 @@ function saveSem(){
   if(!tot){alert('Informe o valor total recebido.');return;}
   if(selDias===0){alert('Selecione ao menos um dia trabalhado.');return;}
   const cx=calcSem(tot,selDias,ped);
-  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs});
+  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs});
   save(); closeModal(); render();
 }
 window.editSem=id=>{ const s=DB.semanas.find(x=>x.id===id); if(!s)return; document.getElementById('mi').innerHTML=modalSem(s); document.getElementById('ov').classList.add('open'); setTimeout(prevSem,50); };
@@ -672,7 +685,7 @@ window.updateSem=id=>{
   const data=document.getElementById('ms-data')?.value, obs=document.getElementById('ms-obs')?.value||'';
   if(!tot){alert('Informe o valor total recebido.');return;}
   const cx=calcSem(tot,selDias,ped), idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0)return;
-  DB.semanas[idx]={id,data,total:tot,dias:selDias,pedDia,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs};
+  DB.semanas[idx]={id,data,total:tot,dias:selDias,pedDia,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs};
   save(); closeModal(); render(); showToast('✅ Lançamento atualizado!');
 };
 
