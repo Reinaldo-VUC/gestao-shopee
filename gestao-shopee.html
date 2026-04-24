@@ -237,6 +237,7 @@ input:checked+.sldr:before{transform:translateX(20px)}
       <button class="sb-nav-item active" onclick="go('dash')" id="sb-dash"><span class="sb-nav-icon">📊</span> Painel</button>
       <button class="sb-nav-item" onclick="go('ent')" id="sb-ent"><span class="sb-nav-icon">📥</span> Entradas</button>
       <button class="sb-nav-item" onclick="go('desp')" id="sb-desp"><span class="sb-nav-icon">📤</span> Despesas</button>
+      <button class="sb-nav-item" onclick="go('anal')" id="sb-anal"><span class="sb-nav-icon">🔍</span> Análise</button>
       <button class="sb-nav-item" onclick="go('cfg')" id="sb-cfg"><span class="sb-nav-icon">⚙️</span> Configurações</button>
     </div>
     <div class="sb-bottom">
@@ -273,6 +274,7 @@ input:checked+.sldr:before{transform:translateX(20px)}
     <button class="nb active" onclick="go('dash')" id="nav-dash"><span class="ni">📊</span><span class="nl">Painel</span></button>
     <button class="nb" onclick="go('ent')" id="nav-ent"><span class="ni">📥</span><span class="nl">Entradas</span></button>
     <button class="nb" onclick="go('desp')" id="nav-desp"><span class="ni">📤</span><span class="nl">Despesas</span></button>
+    <button class="nb" onclick="go('anal')" id="nav-anal"><span class="ni">🔍</span><span class="nl">Análise</span></button>
     <button class="nb" onclick="go('cfg')" id="nav-cfg"><span class="ni">⚙️</span><span class="nl">Config</span></button>
   </div>
 </div>
@@ -409,7 +411,7 @@ window.toggleTheme=()=>{ DB.cfg.tema=DB.cfg.tema==='dark'?'light':'dark'; save()
 let TAB='dash';
 window.go=t=>{
   TAB=t;
-  ['dash','ent','desp','cfg'].forEach(x=>{
+  ['dash','ent','desp','anal','cfg'].forEach(x=>{
     const m=document.getElementById('nav-'+x), s=document.getElementById('sb-'+x);
     if(m){ m.classList.toggle('active',x===t); }
     if(s){ s.classList.toggle('active',x===t); }
@@ -598,7 +600,7 @@ function refreshExtras(){ const el=document.getElementById('extras-list'); if(!e
 
 // ═══════════ MODAL SEMANA ═════════════════════════════════════════
 let selDias=5;
-window.openModal=t=>{ const mi=document.getElementById('mi'); selDias=5; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); document.getElementById('ov').classList.add('open'); };
+window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=5; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); if(t==='rota') mi.innerHTML=modalRota(); if(t==='editRota') mi.innerHTML=modalRota(extra); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
 window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 
 function modalSem(s){
@@ -740,7 +742,287 @@ function gerarPDF(){
   </body></html>`); win.document.close();
 }
 
-// ═══════════ TOAST ════════════════════════════════════════════════
+// ═══════════ ANÁLISE ══════════════════════════════════════════════
+function renderAnal(){
+  const c = DB.cfg;
+  const rotas = DB.cfg.rotas || [];
+
+  // ── Dados reais por rota ──────────────────────────────────────────
+  function semanasDaRota(rota){
+    if(!rota.dataInicio) return DB.semanas;
+    return DB.semanas.filter(s => {
+      if(!s.data) return false;
+      const d = s.data;
+      const apos = !rota.dataInicio || d >= rota.dataInicio;
+      const antes = !rota.dataFim   || d <= rota.dataFim;
+      return apos && antes;
+    });
+  }
+
+  function statsRota(rota){
+    const sems = semanasDaRota(rota);
+    if(!sems.length) return null;
+    const recTotal   = sems.reduce((a,s)=>a+(+s.total||0),0);
+    const pktsTotal  = sems.reduce((a,s)=>a+(+s.pkts||0),0);
+    const diasTotal  = sems.reduce((a,s)=>a+(+s.dias||0),0);
+    const motTotal   = sems.reduce((a,s)=>a+(+s.custoMot||0),0);
+    const semanas    = sems.length;
+    const recMedia   = recTotal/semanas;
+    const pktsMedia  = pktsTotal/semanas;
+    const diasMedia  = diasTotal/semanas;
+    // Custo fixo mensal pro-rata por semana (4.3 semanas/mês)
+    const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+    const fixaSem    = fixaMensal/4.3;
+    const despTotal  = motTotal + (fixaSem*semanas);
+    const lucroTotal = recTotal - despTotal;
+    const lucroMedia = lucroTotal/semanas;
+    const margem     = recTotal>0 ? (lucroTotal/recTotal)*100 : 0;
+    // Ponto de equilíbrio
+    const custoDiaMot = (+c.diaria||0)+(+c.valeRefeicaoDia||0);
+    const diasMedSem  = diasMedia||5;
+    const custoFixoSem= fixaSem + custoDiaMot*diasMedSem;
+    const minPkts     = Math.ceil(custoFixoSem/(+c.valorPacote||0.5));
+    const minReceita  = custoFixoSem + (+rota.fixoDia||c.fixoDia||0)*diasMedSem + (+rota.pedagioShopee||c.pedagioShopee||0)*diasMedSem;
+    return {recTotal,pktsTotal,diasTotal,motTotal,semanas,recMedia,pktsMedia,diasMedia,despTotal,lucroTotal,lucroMedia,margem,minPkts,fixaSem,custoFixoSem};
+  }
+
+  // ── Bloco 0: sem rotas cadastradas ───────────────────────────────
+  if(rotas.length === 0){
+    return `
+      <div class="sh"><div class="st">🔍 Análise de Rotas</div></div>
+      <div class="card" style="text-align:center;padding:32px 20px">
+        <div style="font-size:48px;margin-bottom:12px">🗺️</div>
+        <div class="fw8 ff" style="font-size:17px;margin-bottom:8px">Nenhuma rota cadastrada ainda</div>
+        <div style="font-size:13px;color:var(--t2);margin-bottom:20px;line-height:1.6">
+          Cadastre suas rotas para ver o comparativo, simulador, diagnóstico e ponto de equilíbrio.
+        </div>
+        <button class="btn bsm" onclick="openModal('rota')">+ Cadastrar Rota</button>
+      </div>`;
+  }
+
+  const statsArr = rotas.map(r => ({rota:r, stats:statsRota(r)}));
+  const melhor   = statsArr.filter(x=>x.stats).sort((a,b)=>(b.stats.lucroMedia||0)-(a.stats.lucroMedia||0))[0];
+
+  // ── Bloco 1: Comparativo ─────────────────────────────────────────
+  const comparativo = `
+    <div class="card">
+      <div class="ct">📊 Comparativo de Rotas</div>
+      <div style="display:grid;grid-template-columns:${rotas.map(()=>'1fr').join(' ')};gap:12px;margin-bottom:14px">
+        ${rotas.map((r,i) => {
+          const s = statsArr[i].stats;
+          const isMelhor = melhor && melhor.rota.nome === r.nome && s;
+          return `
+            <div style="background:${isMelhor?'rgba(52,211,153,.07)':'var(--s2)'};border:1.5px solid ${isMelhor?'var(--gn)':'var(--bd)'};border-radius:14px;padding:16px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+                <span style="font-size:20px">${r.icone||'🗺️'}</span>
+                <span class="fw8 ff" style="font-size:14px;color:var(--tx)">${r.nome}</span>
+                ${isMelhor?'<span style="font-size:10px;background:var(--gn);color:#000;padding:2px 8px;border-radius:99px;font-weight:700;margin-left:auto">✓ MELHOR</span>':''}
+              </div>
+              ${s ? `
+                <div style="font-size:11px;color:var(--t2);margin-bottom:4px">Receita média/sem</div>
+                <div class="fw8 c-gn" style="font-size:18px;margin-bottom:8px">${R$(s.recMedia)}</div>
+                <div style="font-size:11px;color:var(--t2);margin-bottom:2px">Lucro médio/sem</div>
+                <div class="fw8" style="font-size:16px;color:${s.lucroMedia>=0?'var(--gn)':'var(--rd)'};margin-bottom:8px">${R$(s.lucroMedia)}</div>
+                <div class="row" style="padding:4px 0"><span class="rl" style="font-size:11px">Margem</span><span style="font-size:11px;font-weight:700;color:${s.margem>=0?'var(--gn)':'var(--rd)'}">${s.margem.toFixed(1)}%</span></div>
+                <div class="row" style="padding:4px 0"><span class="rl" style="font-size:11px">Semanas</span><span class="rv" style="font-size:11px">${s.semanas}</span></div>
+                <div class="row" style="padding:4px 0"><span class="rl" style="font-size:11px">Pacotes/sem</span><span class="rv" style="font-size:11px">${Math.round(s.pktsMedia).toLocaleString('pt-BR')}</span></div>
+                <div class="row" style="padding:4px 0;border-bottom:none"><span class="rl" style="font-size:11px">Dias/sem</span><span class="rv" style="font-size:11px">${s.diasMedia.toFixed(1)}</span></div>
+              ` : `<div style="font-size:12px;color:var(--t2);text-align:center;padding:16px 0">Sem dados lançados<br>para este período</div>`}
+            </div>`;
+        }).join('')}
+      </div>
+      ${melhor && statsArr.filter(x=>x.stats).length>1 ? `
+        <div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:10px;padding:12px;font-size:13px;color:var(--gn)">
+          ✅ <b>${melhor.rota.nome}</b> é mais lucrativa — lucro médio de <b>${R$(melhor.stats.lucroMedia)}/semana</b>
+          ${statsArr.filter(x=>x.stats).length>1 ? ` (${R$(melhor.stats.lucroMedia - statsArr.filter(x=>x.stats&&x.rota.nome!==melhor.rota.nome).reduce((b,x)=>Math.max(b,x.stats.lucroMedia),0))} a mais/sem)` : ''}
+        </div>` : ''}
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn bsm" onclick="openModal('rota')">+ Nova Rota</button>
+        ${rotas.map((r,i)=>`<button class="btn bsm bgh" onclick="openModal('editRota',${i})">✏️ ${r.nome}</button>`).join('')}
+      </div>
+    </div>`;
+
+  // ── Bloco 2: Simulador ───────────────────────────────────────────
+  const rotaSimIdx = DB.cfg.rotaSimIdx || 0;
+  const rotaSim    = rotas[rotaSimIdx] || rotas[0];
+  const simulador  = `
+    <div class="card">
+      <div class="ct">🎯 Simulador "E se?"</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Ajuste os valores e veja o impacto no lucro em tempo real</div>
+      ${rotas.length>1?`
+        <div class="fld">
+          <label class="lbl">Simular rota</label>
+          <select class="inp" onchange="DB.cfg.rotaSimIdx=+this.value;save();window.render()">
+            ${rotas.map((r,i)=>`<option value="${i}" ${i===rotaSimIdx?'selected':''}>${r.nome}</option>`).join('')}
+          </select>
+        </div>`:''}
+      <div id="sim-result" style="background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div id="sim-lucro" class="fw8 ff" style="font-size:22px;text-align:center;margin-bottom:4px">—</div>
+        <div style="font-size:11px;color:var(--t2);text-align:center">Lucro semanal simulado</div>
+      </div>
+      <div class="fld">
+        <label class="lbl">Dias trabalhados: <span id="lbl-dias">${rotaSim?.diasPadrao||5}</span></label>
+        <input type="range" id="sl-dias" min="1" max="6" value="${rotaSim?.diasPadrao||5}" oninput="document.getElementById('lbl-dias').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>1 dia</span><span>6 dias</span></div>
+      </div>
+      <div class="fld">
+        <label class="lbl">Pacotes por dia: <span id="lbl-pkts">${rotaSim?.pktsMediaDia||500}</span></label>
+        <input type="range" id="sl-pkts" min="100" max="1500" step="50" value="${rotaSim?.pktsMediaDia||500}" oninput="document.getElementById('lbl-pkts').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>100</span><span>1.500</span></div>
+      </div>
+      <div class="fld">
+        <label class="lbl">Diária do motorista: R$ <span id="lbl-mot">${c.diaria||200}</span></label>
+        <input type="range" id="sl-mot" min="50" max="400" step="10" value="${c.diaria||200}" oninput="document.getElementById('lbl-mot').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>R$ 50</span><span>R$ 400</span></div>
+      </div>
+      <div id="sim-breakdown" style="font-size:12px;color:var(--t2);margin-top:8px;line-height:2"></div>
+    </div>`;
+
+  // ── Bloco 3: Diagnóstico ─────────────────────────────────────────
+  const diags = [];
+  statsArr.forEach(({rota, stats}) => {
+    if(!stats) return;
+    const pctMot = stats.recMedia>0?(stats.motTotal/stats.semanas)/stats.recMedia*100:0;
+    if(pctMot>35) diags.push({tp:'a-rd',icon:'⚠️',title:`${rota.nome}: Custo do motorista alto`,sub:`Representa ${pctMot.toFixed(0)}% da receita — ideal abaixo de 35%`});
+    else if(pctMot>0) diags.push({tp:'a-gn',icon:'✅',title:`${rota.nome}: Custo do motorista saudável`,sub:`Representa ${pctMot.toFixed(0)}% da receita — dentro do ideal`});
+    if(stats.margem < 10 && stats.margem >= 0) diags.push({tp:'a-yw',icon:'📉',title:`${rota.nome}: Margem baixa (${stats.margem.toFixed(1)}%)`,sub:'Margem abaixo de 10% — avalie reduzir custos ou aumentar volume'});
+    if(stats.margem < 0) diags.push({tp:'a-rd',icon:'🚨',title:`${rota.nome}: Operando no prejuízo!`,sub:`Margem de ${stats.margem.toFixed(1)}% — receita não cobre as despesas`});
+    if(stats.margem >= 20) diags.push({tp:'a-gn',icon:'🎯',title:`${rota.nome}: Operação saudável`,sub:`Margem de ${stats.margem.toFixed(1)}% — excelente resultado`});
+    const projecaoAnual = stats.lucroMedia * 52;
+    diags.push({tp:'a-bl',icon:'📅',title:`${rota.nome}: Projeção anual`,sub:`Mantendo este ritmo: lucro de ${R$(projecaoAnual)} por ano`});
+  });
+  if(diags.length===0) diags.push({tp:'a-bl',icon:'💡',title:'Lance mais semanas para ver diagnósticos',sub:'O sistema analisa automaticamente quando há dados suficientes'});
+
+  const diagnostico = `
+    <div class="card">
+      <div class="ct">🚨 Diagnóstico Inteligente</div>
+      ${diags.map(d=>`<div class="alrt ${d.tp}"><div class="aicon">${d.icon}</div><div><div class="atitle">${d.title}</div><div class="asub">${d.sub}</div></div></div>`).join('')}
+    </div>`;
+
+  // ── Bloco 4: Ponto de Equilíbrio ─────────────────────────────────
+  const equilibrio = `
+    <div class="card">
+      <div class="ct">📈 Ponto de Equilíbrio</div>
+      ${statsArr.map(({rota, stats}) => {
+        if(!stats) return `<div style="font-size:13px;color:var(--t2);margin-bottom:12px">${rota.nome}: sem dados suficientes</div>`;
+        const pktsAtuais = Math.round(stats.pktsMedia);
+        const pct = stats.minPkts > 0 ? Math.min(100, Math.round((pktsAtuais/stats.minPkts)*100)) : 100;
+        const status = pct >= 100 ? {cor:'var(--gn)', txt:'✅ Acima do ponto de equilíbrio'} :
+                       pct >= 80  ? {cor:'var(--yw)', txt:'⚠️ Próximo do limite'} :
+                                    {cor:'var(--rd)', txt:'🚨 Abaixo do mínimo necessário'};
+        return `
+          <div style="margin-bottom:18px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span class="fw8" style="font-size:14px">${rota.icone||'🗺️'} ${rota.nome}</span>
+              <span style="font-size:11px;font-weight:700;color:${status.cor}">${status.txt}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+              <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+                <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em">Mínimo de pacotes/sem</div>
+                <div class="fw8" style="font-size:20px;color:var(--yw);margin-top:4px">${stats.minPkts.toLocaleString('pt-BR')}</div>
+              </div>
+              <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+                <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em">Média atual/sem</div>
+                <div class="fw8" style="font-size:20px;color:${pct>=100?'var(--gn)':'var(--rd)'};margin-top:4px">${pktsAtuais.toLocaleString('pt-BR')}</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--t2);margin-bottom:6px">${pct}% do mínimo necessário</div>
+            <div style="background:var(--bd);border-radius:99px;height:10px;overflow:hidden">
+              <div style="height:100%;border-radius:99px;background:${status.cor};width:${pct}%;transition:width .6s"></div>
+            </div>
+            ${pct<100?`<div style="font-size:11px;color:var(--rd);margin-top:6px">Faltam ${(stats.minPkts-pktsAtuais).toLocaleString('pt-BR')} pacotes/sem para cobrir os custos</div>`:`<div style="font-size:11px;color:var(--gn);margin-top:6px">Excedente de ${(pktsAtuais-stats.minPkts).toLocaleString('pt-BR')} pacotes/sem acima do mínimo</div>`}
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  return `
+    <div class="sh">
+      <div class="st">🔍 Análise de Rotas</div>
+      <button class="btn bsm" onclick="openModal('rota')">+ Nova Rota</button>
+    </div>
+    ${comparativo}
+    ${simulador}
+    ${diagnostico}
+    ${equilibrio}`;
+}
+
+// ── Calc simulador ────────────────────────────────────────────────
+window.calcSim = function(){
+  const c      = DB.cfg;
+  const ri     = DB.cfg.rotaSimIdx || 0;
+  const rota   = (DB.cfg.rotas||[])[ri] || {};
+  const dias   = +document.getElementById('sl-dias')?.value || 5;
+  const pkts   = +document.getElementById('sl-pkts')?.value || 500;
+  const motDia = +document.getElementById('sl-mot')?.value  || c.diaria||200;
+  const fixoDia    = +rota.fixoDia    || c.fixoDia    || 0;
+  const pedShopee  = +rota.pedagioShopee || c.pedagioShopee || 0;
+  const valPacote  = +c.valorPacote  || 0.5;
+  const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+  const recSem     = fixoDia*dias + pedShopee*dias + pkts*valPacote;
+  const motSem     = (motDia + (+c.valeRefeicaoDia||0)) * dias;
+  const fixaSem    = fixaMensal / 4.3;
+  const despSem    = motSem + fixaSem;
+  const lucroSem   = recSem - despSem;
+  const el = document.getElementById('sim-lucro');
+  const bd = document.getElementById('sim-breakdown');
+  if(el){ el.textContent = R$(lucroSem); el.style.color = lucroSem>=0?'var(--gn)':'var(--rd)'; }
+  if(bd){ bd.innerHTML = `
+    💰 Receita estimada: <b style="color:var(--gn)">${R$(recSem)}</b><br>
+    🏁 Fixo (${dias}d × ${R$(fixoDia)}): <b>${R$(fixoDia*dias)}</b><br>
+    🛣️ Pedágio Shopee: <b>${R$(pedShopee*dias)}</b><br>
+    📦 Pacotes (${pkts}×${R$(valPacote)}): <b>${R$(pkts*valPacote)}</b><br>
+    👤 Motorista: <b style="color:var(--bl)">${R$(motSem)}</b><br>
+    📋 Fixas pro-rata: <b style="color:var(--rd)">${R$(fixaSem)}</b>
+  `; }
+};
+
+// ── Modal Rota ────────────────────────────────────────────────────
+function modalRota(idx){
+  const rotas = DB.cfg.rotas || [];
+  const r = idx !== undefined ? rotas[idx] : null;
+  const isEdit = r !== null && r !== undefined;
+  return `
+    <div class="mh"><span class="mt">${isEdit?'Editar Rota':'Nova Rota'}</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div class="fld"><label class="lbl">Nome da rota</label><input class="inp" id="rt-nome" placeholder="Ex: Rota Nova, Rota Centro" value="${r?.nome||''}"></div>
+    <div class="fld"><label class="lbl">Ícone (emoji)</label><input class="inp" id="rt-icon" placeholder="Ex: 🗺️ 🚛 📦" value="${r?.icone||'🗺️'}" style="font-size:20px;width:100px"></div>
+    <div class="fld"><label class="lbl">Data de início desta rota</label><input class="inp" type="date" id="rt-inicio" value="${r?.dataInicio||''}"><div style="font-size:11px;color:var(--t2);margin-top:4px">Lançamentos a partir desta data serão desta rota</div></div>
+    <div class="fld"><label class="lbl">Data de fim (deixe vazio se ainda ativa)</label><input class="inp" type="date" id="rt-fim" value="${r?.dataFim||''}"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;margin-top:4px">Valores desta rota (se diferentes da config)</div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="rt-fixo" value="${r?.fixoDia||DB.cfg.fixoDia||0}" placeholder="${DB.cfg.fixoDia||0}"></div>
+      <div class="fld"><label class="lbl">Ped.Shopee/dia (R$)</label><input class="inp" type="number" id="rt-ped" value="${r?.pedagioShopee||DB.cfg.pedagioShopee||0}" placeholder="${DB.cfg.pedagioShopee||0}"></div>
+    </div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Dias padrão/sem</label><input class="inp" type="number" id="rt-dias" value="${r?.diasPadrao||5}" min="1" max="6"></div>
+      <div class="fld"><label class="lbl">Pkts médios/dia</label><input class="inp" type="number" id="rt-pkts" value="${r?.pktsMediaDia||500}"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn" onclick="saveRota(${isEdit?idx:'null'})" style="flex:2">💾 ${isEdit?'Salvar alterações':'Cadastrar rota'}</button>
+      ${isEdit?`<button class="btn brd" onclick="delRota(${idx})" style="flex:1">🗑 Excluir</button>`:''}
+    </div>`;
+}
+
+window.saveRota = function(idx){
+  const nome  = document.getElementById('rt-nome')?.value.trim();
+  if(!nome){ alert('Informe o nome da rota.'); return; }
+  if(!DB.cfg.rotas) DB.cfg.rotas = [];
+  const rota = {
+    nome, icone: document.getElementById('rt-icon')?.value||'🗺️',
+    dataInicio: document.getElementById('rt-inicio')?.value||'',
+    dataFim:    document.getElementById('rt-fim')?.value||'',
+    fixoDia:    +document.getElementById('rt-fixo')?.value||0,
+    pedagioShopee: +document.getElementById('rt-ped')?.value||0,
+    diasPadrao: +document.getElementById('rt-dias')?.value||5,
+    pktsMediaDia: +document.getElementById('rt-pkts')?.value||500,
+  };
+  if(idx !== null && idx !== undefined) DB.cfg.rotas[idx] = rota;
+  else DB.cfg.rotas.push(rota);
+  save(); closeModal(); render(); showToast('✅ Rota salva!');
+};
+window.delRota = function(idx){
+  if(!confirm('Excluir esta rota?')) return;
+  DB.cfg.rotas.splice(idx,1); save(); closeModal(); render();
+};
 function showToast(msg){ const t=document.createElement('div'); t.textContent=msg; t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1c1f27;color:#eef0f4;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;border:1px solid #272b36;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)'; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
 
 // ═══════════ RENDER ═══════════════════════════════════════════════
@@ -750,6 +1032,7 @@ window.render=function render(){
   if(TAB==='dash') c.innerHTML=renderDash();
   if(TAB==='ent')  c.innerHTML=renderEnt();
   if(TAB==='desp') c.innerHTML=renderDesp();
+  if(TAB==='anal') { c.innerHTML=renderAnal(); setTimeout(calcSim,50); }
   if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
 </script>
