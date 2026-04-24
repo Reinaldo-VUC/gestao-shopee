@@ -937,6 +937,15 @@ function renderAnal(){
       </div>
 
       <div class="fld">
+        <label class="lbl">Combustível (diesel) gasto por dia (R$)</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sl-comb" min="0" max="500" step="10" value="${rotaSim?.combustivelDia||0}" oninput="syncSlider('comb',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-comb" min="0" max="500" value="${rotaSim?.combustivelDia||0}" oninput="syncInput('comb',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin-top:4px">⛽ Baseado na sua simulação de rota</div>
+      </div>
+
+      <div class="fld">
         <label class="lbl">Custo total do motorista por dia (R$) — diária + refeição já inclusos</label>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="range" id="sl-mot" min="50" max="500" step="10" value="${(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
@@ -974,7 +983,7 @@ function renderAnal(){
     //   Total despesas - Fixo saída (já pago pela Shopee) - Sobra pedágio (lucro extra do pedágio)
     const fixoTotalSem   = fixoDia * dias;
     const sobraPedSem    = sobraPed; // já calculado acima: (pedS - pedGasto) * dias
-    const despCobrir     = Math.max(0, (fixaSem + motSem) - fixoTotalSem - sobraPedSem);
+    const despCobrir     = Math.max(0, (fixaSem + motSem + combSem) - fixoTotalSem - sobraPedSem);
     const minPktsSem     = despCobrir > 0 ? Math.ceil(despCobrir / (valPkt * dias || 1)) : 0;
     const sabValePena = (() => {
       const recExtra = fixoDia + pedS + pkts*valPkt;
@@ -1157,6 +1166,7 @@ window.calcSim = function(){
   const dias    = +document.getElementById('inp-dias')?.value || +document.getElementById('sl-dias')?.value || 5;
   const pkts    = +document.getElementById('inp-pkts')?.value || +document.getElementById('sl-pkts')?.value || 500;
   const pedGasto= +document.getElementById('inp-ped')?.value  || +document.getElementById('sl-ped')?.value  || 0;
+  const combDia = +document.getElementById('inp-comb')?.value || +document.getElementById('sl-comb')?.value || 0;
   const motDia  = +document.getElementById('inp-mot')?.value  || +document.getElementById('sl-mot')?.value  || c.diaria||200;
   const fixoDia    = +rota.fixoDia       || c.fixoDia       || 0;
   const pedShopee  = +rota.pedagioShopee || c.pedagioShopee || 0;
@@ -1165,7 +1175,8 @@ window.calcSim = function(){
   const recSem     = fixoDia*dias + pedShopee*dias + pkts*dias*valPacote;
   const motSem     = motDia * dias; // valor total já digitado pelo usuário (inclui refeição)
   const fixaSem    = fixaMensal / 4.3;
-  const despSem    = motSem + fixaSem;
+  const combSem    = combDia * dias;
+  const despSem    = motSem + fixaSem + combSem;
   const lucroSem   = recSem - despSem;
   const lucroMes   = lucroSem * 4.3;
   const sobraPed   = (pedShopee - pedGasto) * dias;
@@ -1210,7 +1221,7 @@ window.calcSim = function(){
       const r  = fixoDia*dBase + pedShopee*dBase + p*dBase*valPacote;
       const m  = (mBase+(+c.valeRefeicaoDia||0))*dBase;
       const f  = fixaMensal/4.3;
-      const l  = r - m - f;
+      const l  = r - m - f - cb;
       const sb = (pedShopee - pedGasto)*dBase;
       return `<div style="background:${cor}11;border:1.5px solid ${cor}44;border-radius:12px;padding:14px;text-align:center">
         <div style="font-size:18px;margin-bottom:4px">${icone}</div>
@@ -1241,6 +1252,10 @@ function modalRota(idx){
       <div class="fld"><label class="lbl">Ped.Shopee/dia (R$)</label><input class="inp" type="number" id="rt-ped" value="${r?.pedagioShopee||DB.cfg.pedagioShopee||0}" placeholder="${DB.cfg.pedagioShopee||0}"></div>
     </div>
     <div class="inp-row">
+      <div class="fld"><label class="lbl">Ped. gasto/dia (R$)</label><input class="inp" type="number" id="rt-pedgasto" value="${r?.pedagioDia||0}"></div>
+      <div class="fld"><label class="lbl">Combustível/dia (R$)</label><input class="inp" type="number" id="rt-comb" value="${r?.combustivelDia||0}"></div>
+    </div>
+    <div class="inp-row">
       <div class="fld"><label class="lbl">Dias padrão/sem</label><input class="inp" type="number" id="rt-dias" value="${r?.diasPadrao||5}" min="1" max="6"></div>
       <div class="fld"><label class="lbl">Pkts médios/dia</label><input class="inp" type="number" id="rt-pkts" value="${r?.pktsMediaDia||500}"></div>
     </div>
@@ -1260,6 +1275,8 @@ window.saveRota = function(idx){
     dataFim:    document.getElementById('rt-fim')?.value||'',
     fixoDia:    +document.getElementById('rt-fixo')?.value||0,
     pedagioShopee: +document.getElementById('rt-ped')?.value||0,
+    pedagioDia: +document.getElementById('rt-pedgasto')?.value||0,
+    combustivelDia: +document.getElementById('rt-comb')?.value||0,
     diasPadrao: +document.getElementById('rt-dias')?.value||5,
     pktsMediaDia: +document.getElementById('rt-pkts')?.value||500,
   };
