@@ -780,8 +780,13 @@ function renderAnal(){
     // Ponto de equilíbrio
     const custoDiaMot = (+c.diaria||0)+(+c.valeRefeicaoDia||0);
     const diasMedSem  = diasMedia||5;
-    const custoFixoSem= fixaSem + custoDiaMot*diasMedSem;
-    const minPkts     = Math.ceil(custoFixoSem/(+c.valorPacote||0.5));
+    const custoFixoSem   = fixaSem + custoDiaMot*diasMedSem;
+    const fixoRotaSem    = (+rota.fixoDia||c.fixoDia||0)*diasMedSem;
+    const pedShopeeRota  = (+rota.pedagioShopee||c.pedagioShopee||0)*diasMedSem;
+    const pedGastoRota   = (+rota.pedagioDia||c.pedagioDia||0)*diasMedSem;
+    const sobraPedRota   = pedShopeeRota - pedGastoRota;
+    const despCobrir     = Math.max(0, custoFixoSem - fixoRotaSem - sobraPedRota);
+    const minPkts        = despCobrir > 0 ? Math.ceil(despCobrir/(+c.valorPacote||0.5)) : 0;
     const minReceita  = custoFixoSem + (+rota.fixoDia||c.fixoDia||0)*diasMedSem + (+rota.pedagioShopee||c.pedagioShopee||0)*diasMedSem;
     return {recTotal,pktsTotal,diasTotal,motTotal,semanas,recMedia,pktsMedia,diasMedia,despTotal,lucroTotal,lucroMedia,margem,minPkts,fixaSem,custoFixoSem};
   }
@@ -863,7 +868,7 @@ function renderAnal(){
     const vrDia   = +c.valeRefeicaoDia||0;
     const fixaMes = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
     const rec     = fixoDia*dias + pedS*dias + pkts*dias*(+c.valorPacote||0.5);
-    const mot     = (motDia+vrDia)*dias;
+    const mot     = motDia*dias; // valor total já incluindo refeição
     const fixa    = fixaMes/4.3;
     const sobra   = (pedS - pedGasto)*dias;
     const lucro   = rec - mot - fixa;
@@ -932,10 +937,10 @@ function renderAnal(){
       </div>
 
       <div class="fld">
-        <label class="lbl">Diária do motorista (R$)</label>
+        <label class="lbl">Custo total do motorista por dia (R$) — diária + refeição já inclusos</label>
         <div style="display:flex;align-items:center;gap:10px">
-          <input type="range" id="sl-mot" min="50" max="500" step="10" value="${c.diaria||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
-          <input type="number" id="inp-mot" min="50" max="500" value="${c.diaria||200}" oninput="syncInput('mot',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+          <input type="range" id="sl-mot" min="50" max="500" step="10" value="${(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-mot" min="50" max="500" value="${(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncInput('mot',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
         </div>
       </div>
 
@@ -964,7 +969,13 @@ function renderAnal(){
     const pctMot    = recSem>0?(motSem/recSem)*100:0;
     const pctFixa   = recSem>0?(fixaSem/recSem)*100:0;
     const margem    = recSem>0?(lucroSem/recSem)*100:0;
-    const minPktsSem = fixaSem+motSem > 0 ? Math.ceil((fixaSem+motSem)/(valPkt*dias||1)) : 0;
+    // Ponto de equilíbrio correto:
+    // Despesas que precisam ser cobertas pelos pacotes =
+    //   Total despesas - Fixo saída (já pago pela Shopee) - Sobra pedágio (lucro extra do pedágio)
+    const fixoTotalSem   = fixoDia * dias;
+    const sobraPedSem    = sobraPed; // já calculado acima: (pedS - pedGasto) * dias
+    const despCobrir     = Math.max(0, (fixaSem + motSem) - fixoTotalSem - sobraPedSem);
+    const minPktsSem     = despCobrir > 0 ? Math.ceil(despCobrir / (valPkt * dias || 1)) : 0;
     const sabValePena = (() => {
       const recExtra = fixoDia + pedS + pkts*valPkt;
       const despExtra = motDia+vrDia;
@@ -1152,7 +1163,7 @@ window.calcSim = function(){
   const valPacote  = +c.valorPacote      || 0.5;
   const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
   const recSem     = fixoDia*dias + pedShopee*dias + pkts*dias*valPacote;
-  const motSem     = (motDia + (+c.valeRefeicaoDia||0)) * dias;
+  const motSem     = motDia * dias; // valor total já digitado pelo usuário (inclui refeição)
   const fixaSem    = fixaMensal / 4.3;
   const despSem    = motSem + fixaSem;
   const lucroSem   = recSem - despSem;
@@ -1178,8 +1189,8 @@ window.calcSim = function(){
     ${sobraPed>0?`<div class="row" style="padding:4px 0"><span style="font-size:12px">💛 Sobra pedágio</span><b style="color:var(--yw)">${R$(sobraPed)}</b></div>`:''}
     <div class="row" style="padding:4px 0"><span style="font-size:12px;font-weight:700">💰 Total receita/sem</span><b style="color:var(--gn);font-size:14px">${R$(recSem)}</b></div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">📤 Despesas</div>
-    <div class="row" style="padding:4px 0"><span style="font-size:12px">👤 Motorista (${dias}d × ${R$(motDia+((+c.valeRefeicaoDia)||0))})</span><b style="color:var(--bl)">${R$(motSem)}</b></div>
-    <div style="font-size:11px;color:var(--t2);padding:3px 0 3px 12px">Diária ${R$(motDia)} + Vale refeição ${R$(+c.valeRefeicaoDia||0)} = ${R$(motDia+(+c.valeRefeicaoDia||0))}/dia</div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">👤 Motorista (${dias}d × ${R$(motDia)})</span><b style="color:var(--bl)">${R$(motSem)}</b></div>
+    <div style="font-size:11px;color:var(--t2);padding:3px 0 3px 12px">Valor total/dia já incluindo refeição</div>
     <div class="row" style="padding:4px 0"><span style="font-size:12px">📋 Fixas mensais ÷ 4,3 semanas</span><b style="color:var(--rd)">${R$(fixaSem)}</b></div>
     ${fixasDetalhadas.map(f=>`<div style="font-size:11px;color:var(--t2);padding:2px 0 2px 12px">${f.nome}: ${R$(f.val)}/mês</div>`).join('')}
     <div class="row" style="padding:6px 0;border-top:1px solid var(--bd);margin-top:4px"><span style="font-size:12px;font-weight:700">📤 Total despesas/sem</span><b style="color:var(--rd);font-size:14px">${R$(despSem)}</b></div>
