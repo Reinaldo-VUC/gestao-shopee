@@ -845,37 +845,91 @@ function renderAnal(){
   // ── Bloco 2: Simulador ───────────────────────────────────────────
   const rotaSimIdx = DB.cfg.rotaSimIdx || 0;
   const rotaSim    = rotas[rotaSimIdx] || rotas[0];
+
+  // Média real de pacotes/dia da rota com dados
+  const rotaComDados = statsArr.find(x=>x.stats);
+  const pktsMediaDiaReal = rotaComDados ? Math.round(rotaComDados.stats.pktsMedia / (rotaComDados.stats.diasMedia||5)) : 500;
+  const pktsConservador  = Math.round(pktsMediaDiaReal * 0.7);
+  const pktsRealista     = pktsMediaDiaReal;
+  const pktsOtimista     = Math.round(pktsMediaDiaReal * 1.3);
+
+  function cenarioHtml(label, pkts, cor, icone, rotaS){
+    const dias = rotaS?.diasPadrao||5;
+    const fixoDia = +rotaS?.fixoDia||c.fixoDia||0;
+    const pedS    = +rotaS?.pedagioShopee||c.pedagioShopee||0;
+    const motDia  = +c.diaria||0;
+    const vrDia   = +c.valeRefeicaoDia||0;
+    const fixaMes = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+    const rec     = fixoDia*dias + pedS*dias + pkts*dias*(+c.valorPacote||0.5);
+    const mot     = (motDia+vrDia)*dias;
+    const fixa    = fixaMes/4.3;
+    const lucro   = rec - mot - fixa;
+    return `<div style="background:${cor}11;border:1.5px solid ${cor}44;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:18px;margin-bottom:4px">${icone}</div>
+      <div style="font-size:11px;font-weight:700;color:${cor};text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${label}</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:2px">${pkts.toLocaleString('pt-BR')} pkts/dia</div>
+      <div class="fw8" style="font-size:16px;color:${lucro>=0?'var(--gn)':'var(--rd)'};">${R$(lucro)}<span style="font-size:10px;font-weight:400;color:var(--t2)">/sem</span></div>
+      <div style="font-size:10px;color:var(--t2);margin-top:2px">${R$(lucro*4.3)}/mês</div>
+    </div>`;
+  }
+
   const simulador  = `
     <div class="card">
       <div class="ct">🎯 Simulador "E se?"</div>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Ajuste os valores e veja o impacto no lucro em tempo real</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Ajuste os valores e veja o impacto no lucro em tempo real. Slider e campo numérico são sincronizados.</div>
+
       ${rotas.length>1?`
         <div class="fld">
           <label class="lbl">Simular rota</label>
           <select class="inp" onchange="DB.cfg.rotaSimIdx=+this.value;save();window.render()">
-            ${rotas.map((r,i)=>`<option value="${i}" ${i===rotaSimIdx?'selected':''}>${r.nome}</option>`).join('')}
+            ${rotas.map((r,i)=>`<option value="${i}" ${i===rotaSimIdx?'selected':''}>${r.icone||'🗺️'} ${r.nome}</option>`).join('')}
           </select>
         </div>`:''}
-      <div id="sim-result" style="background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px">
-        <div id="sim-lucro" class="fw8 ff" style="font-size:22px;text-align:center;margin-bottom:4px">—</div>
-        <div style="font-size:11px;color:var(--t2);text-align:center">Lucro semanal simulado</div>
+
+      ${rotaComDados ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">
+            3 Cenários baseados na sua média atual (${pktsMediaDiaReal} pkts/dia)
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+            ${cenarioHtml('Conservador', pktsConservador, '#f43f5e', '🔴', rotaSim)}
+            ${cenarioHtml('Realista',    pktsRealista,    '#fbbf24', '🟡', rotaSim)}
+            ${cenarioHtml('Otimista',    pktsOtimista,    '#34d399', '🟢', rotaSim)}
+          </div>
+        </div>` : ''}
+
+      <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Simulação livre</div>
+
+      <div id="sim-result" style="background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:16px;text-align:center">
+        <div id="sim-lucro" class="fw8 ff" style="font-size:26px;margin-bottom:2px">—</div>
+        <div style="font-size:11px;color:var(--t2)">Lucro semanal · <span id="sim-lucro-mes" style="font-weight:700"></span> por mês</div>
       </div>
+
       <div class="fld">
-        <label class="lbl">Dias trabalhados: <span id="lbl-dias">${rotaSim?.diasPadrao||5}</span></label>
-        <input type="range" id="sl-dias" min="1" max="6" value="${rotaSim?.diasPadrao||5}" oninput="document.getElementById('lbl-dias').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>1 dia</span><span>6 dias</span></div>
+        <label class="lbl">Dias trabalhados</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sl-dias" min="1" max="6" value="${rotaSim?.diasPadrao||5}" oninput="syncSlider('dias',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-dias" min="1" max="6" value="${rotaSim?.diasPadrao||5}" oninput="syncInput('dias',this.value);calcSim()" style="width:64px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+        </div>
       </div>
+
       <div class="fld">
-        <label class="lbl">Pacotes por dia: <span id="lbl-pkts">${rotaSim?.pktsMediaDia||500}</span></label>
-        <input type="range" id="sl-pkts" min="100" max="1500" step="50" value="${rotaSim?.pktsMediaDia||500}" oninput="document.getElementById('lbl-pkts').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>100</span><span>1.500</span></div>
+        <label class="lbl">Pacotes por dia</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sl-pkts" min="100" max="2000" step="50" value="${rotaSim?.pktsMediaDia||pktsMediaDiaReal||500}" oninput="syncSlider('pkts',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-pkts" min="100" max="2000" value="${rotaSim?.pktsMediaDia||pktsMediaDiaReal||500}" oninput="syncInput('pkts',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+        </div>
       </div>
+
       <div class="fld">
-        <label class="lbl">Diária do motorista: R$ <span id="lbl-mot">${c.diaria||200}</span></label>
-        <input type="range" id="sl-mot" min="50" max="400" step="10" value="${c.diaria||200}" oninput="document.getElementById('lbl-mot').textContent=this.value;calcSim()" style="width:100%;accent-color:var(--ac)">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t2)"><span>R$ 50</span><span>R$ 400</span></div>
+        <label class="lbl">Diária do motorista (R$)</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sl-mot" min="50" max="500" step="10" value="${c.diaria||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-mot" min="50" max="500" value="${c.diaria||200}" oninput="syncInput('mot',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+        </div>
       </div>
-      <div id="sim-breakdown" style="font-size:12px;color:var(--t2);margin-top:8px;line-height:2"></div>
+
+      <div id="sim-breakdown" style="background:var(--s2);border-radius:10px;padding:12px;font-size:12px;color:var(--t2);margin-top:4px;line-height:2"></div>
     </div>`;
 
   // ── Bloco 3: Diagnóstico ─────────────────────────────────────────
@@ -946,33 +1000,40 @@ function renderAnal(){
     ${equilibrio}`;
 }
 
+// ── Sync slider ↔ input ───────────────────────────────────────────
+window.syncSlider = function(id, val){ const el=document.getElementById('inp-'+id); if(el) el.value=val; };
+window.syncInput  = function(id, val){ const el=document.getElementById('sl-'+id);  if(el) el.value=val; };
+
 // ── Calc simulador ────────────────────────────────────────────────
 window.calcSim = function(){
-  const c      = DB.cfg;
-  const ri     = DB.cfg.rotaSimIdx || 0;
-  const rota   = (DB.cfg.rotas||[])[ri] || {};
-  const dias   = +document.getElementById('sl-dias')?.value || 5;
-  const pkts   = +document.getElementById('sl-pkts')?.value || 500;
-  const motDia = +document.getElementById('sl-mot')?.value  || c.diaria||200;
-  const fixoDia    = +rota.fixoDia    || c.fixoDia    || 0;
+  const c       = DB.cfg;
+  const ri      = DB.cfg.rotaSimIdx || 0;
+  const rota    = (DB.cfg.rotas||[])[ri] || {};
+  const dias    = +document.getElementById('inp-dias')?.value || +document.getElementById('sl-dias')?.value || 5;
+  const pkts    = +document.getElementById('inp-pkts')?.value || +document.getElementById('sl-pkts')?.value || 500;
+  const motDia  = +document.getElementById('inp-mot')?.value  || +document.getElementById('sl-mot')?.value  || c.diaria||200;
+  const fixoDia    = +rota.fixoDia       || c.fixoDia       || 0;
   const pedShopee  = +rota.pedagioShopee || c.pedagioShopee || 0;
-  const valPacote  = +c.valorPacote  || 0.5;
+  const valPacote  = +c.valorPacote      || 0.5;
   const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
-  const recSem     = fixoDia*dias + pedShopee*dias + pkts*valPacote;
+  const recSem     = fixoDia*dias + pedShopee*dias + pkts*dias*valPacote;
   const motSem     = (motDia + (+c.valeRefeicaoDia||0)) * dias;
   const fixaSem    = fixaMensal / 4.3;
   const despSem    = motSem + fixaSem;
   const lucroSem   = recSem - despSem;
-  const el = document.getElementById('sim-lucro');
-  const bd = document.getElementById('sim-breakdown');
-  if(el){ el.textContent = R$(lucroSem); el.style.color = lucroSem>=0?'var(--gn)':'var(--rd)'; }
+  const lucroMes   = lucroSem * 4.3;
+  const el  = document.getElementById('sim-lucro');
+  const elm = document.getElementById('sim-lucro-mes');
+  const bd  = document.getElementById('sim-breakdown');
+  if(el){  el.textContent  = R$(lucroSem); el.style.color = lucroSem>=0?'var(--gn)':'var(--rd)'; }
+  if(elm){ elm.textContent = R$(lucroMes); elm.style.color= lucroMes>=0?'var(--gn)':'var(--rd)'; }
   if(bd){ bd.innerHTML = `
-    💰 Receita estimada: <b style="color:var(--gn)">${R$(recSem)}</b><br>
-    🏁 Fixo (${dias}d × ${R$(fixoDia)}): <b>${R$(fixoDia*dias)}</b><br>
-    🛣️ Pedágio Shopee: <b>${R$(pedShopee*dias)}</b><br>
-    📦 Pacotes (${pkts}×${R$(valPacote)}): <b>${R$(pkts*valPacote)}</b><br>
-    👤 Motorista: <b style="color:var(--bl)">${R$(motSem)}</b><br>
-    📋 Fixas pro-rata: <b style="color:var(--rd)">${R$(fixaSem)}</b>
+    <div class="row" style="padding:4px 0"><span>💰 Receita estimada/sem</span><b style="color:var(--gn)">${R$(recSem)}</b></div>
+    <div class="row" style="padding:4px 0"><span>🏁 Fixo (${dias}d × ${R$(fixoDia)})</span><b>${R$(fixoDia*dias)}</b></div>
+    <div class="row" style="padding:4px 0"><span>🛣️ Pedágio Shopee (${dias}d)</span><b>${R$(pedShopee*dias)}</b></div>
+    <div class="row" style="padding:4px 0"><span>📦 Pacotes (${pkts}/dia × ${dias}d)</span><b>${R$(pkts*dias*valPacote)}</b></div>
+    <div class="row" style="padding:4px 0"><span>👤 Motorista</span><b style="color:var(--bl)">${R$(motSem)}</b></div>
+    <div class="row" style="padding:4px 0;border-bottom:none"><span>📋 Fixas pro-rata/sem</span><b style="color:var(--rd)">${R$(fixaSem)}</b></div>
   `; }
 };
 
