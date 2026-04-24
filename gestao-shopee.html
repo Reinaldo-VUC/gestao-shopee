@@ -1028,39 +1028,39 @@ function renderAnal(){
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;text-align:center">
         <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita semanal</div>
-          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem)}</div>
+          <div class="fw8 c-gn" style="font-size:17px" id="dg-rec-sem">${R$(proj.recSem)}</div>
         </div>
         <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita mensal</div>
-          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem*4.3)}</div>
+          <div class="fw8 c-gn" style="font-size:17px" id="dg-rec-mes">${R$(proj.recSem*4.3)}</div>
         </div>
         <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita anual</div>
-          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem*52)}</div>
+          <div class="fw8 c-gn" style="font-size:17px" id="dg-rec-ano">${R$(proj.recSem*52)}</div>
         </div>
         <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa semanal</div>
-          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem)}</div>
+          <div class="fw8 c-rd" style="font-size:17px" id="dg-desp-sem">${R$(proj.despSem)}</div>
         </div>
         <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa mensal</div>
-          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem*4.3)}</div>
+          <div class="fw8 c-rd" style="font-size:17px" id="dg-desp-mes">${R$(proj.despSem*4.3)}</div>
         </div>
         <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa anual</div>
-          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem*52)}</div>
+          <div class="fw8 c-rd" style="font-size:17px" id="dg-desp-ano">${R$(proj.despSem*52)}</div>
         </div>
-        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro semanal</div>
-          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem)}</div>
+          <div class="fw8" style="font-size:17px" id="dg-luc-sem">${R$(proj.lucroSem)}</div>
         </div>
-        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro mensal</div>
-          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem*4.3)}</div>
+          <div class="fw8" style="font-size:17px" id="dg-luc-mes">${R$(proj.lucroSem*4.3)}</div>
         </div>
-        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
           <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro anual</div>
-          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem*52)}</div>
+          <div class="fw8" style="font-size:17px" id="dg-luc-ano">${R$(proj.lucroSem*52)}</div>
         </div>
       </div>
       <div style="font-size:11px;color:var(--t2);margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:10px">
@@ -1095,7 +1095,7 @@ function renderAnal(){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
             <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
               <div style="font-size:10px;color:var(--t2);margin-bottom:4px">Mínimo</div>
-              <div class="fw8 c-yw" style="font-size:18px">${minPktsSem.toLocaleString('pt-BR')}</div>
+              <div class="fw8 c-yw" style="font-size:18px" id="eq-min-sem">${minPktsSem.toLocaleString('pt-BR')}</div>
               <div style="font-size:10px;color:var(--t2)">pacotes</div>
             </div>
             <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
@@ -1117,7 +1117,7 @@ function renderAnal(){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
             <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
               <div style="font-size:10px;color:var(--t2);margin-bottom:4px">Mínimo</div>
-              <div class="fw8 c-yw" style="font-size:18px">${minPktsMes.toLocaleString('pt-BR')}</div>
+              <div class="fw8 c-yw" style="font-size:18px" id="eq-min-mes">${minPktsMes.toLocaleString('pt-BR')}</div>
               <div style="font-size:10px;color:var(--t2)">pacotes</div>
             </div>
             <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
@@ -1204,6 +1204,28 @@ window.calcSim = function(){
     ${fixasDetalhadas.map(f=>`<div style="font-size:11px;color:var(--t2);padding:2px 0 2px 12px">${f.nome}: ${R$(f.val)}/mês</div>`).join('')}
     <div class="row" style="padding:6px 0;border-top:1px solid var(--bd);margin-top:4px"><span style="font-size:12px;font-weight:700">📤 Total despesas/sem</span><b style="color:var(--rd);font-size:14px">${R$(despSem)}</b></div>
   `; }
+  // Update diagnostico projection cards
+  const upd = (id, val, color) => { const el=document.getElementById(id); if(el){ el.textContent=R$(val); if(color) el.style.color=color; } };
+  upd('dg-rec-sem',  recSem);
+  upd('dg-rec-mes',  recSem*4.3);
+  upd('dg-rec-ano',  recSem*52);
+  upd('dg-desp-sem', despSem);
+  upd('dg-desp-mes', despSem*4.3);
+  upd('dg-desp-ano', despSem*52);
+  upd('dg-luc-sem',  lucroSem, lucroSem>=0?'var(--gn)':'var(--rd)');
+  upd('dg-luc-mes',  lucroSem*4.3, lucroSem>=0?'var(--gn)':'var(--rd)');
+  upd('dg-luc-ano',  lucroSem*52,  lucroSem>=0?'var(--gn)':'var(--rd)');
+  // Update min pkts equilibrio
+  const fixaMesUpd   = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+  const fixaUpd      = fixaMesUpd/4.3;
+  const sobraPedUpd  = (pedShopee - pedGasto)*dias;
+  const combUpd      = combDia*dias;
+  const despCobrirUpd= Math.max(0,(fixaUpd+motSem+combUpd)-(fixoDia*dias)-sobraPedUpd);
+  const minPktsUpd   = despCobrirUpd>0?Math.ceil(despCobrirUpd/(valPacote*dias||1)):0;
+  const minMesUpd    = Math.ceil(minPktsUpd*4.3);
+  const eqSem=document.getElementById('eq-min-sem'); if(eqSem) eqSem.textContent=minPktsUpd.toLocaleString('pt-BR');
+  const eqMes=document.getElementById('eq-min-mes'); if(eqMes) eqMes.textContent=minMesUpd.toLocaleString('pt-BR');
+
   // Update 3 cenarios dynamically
   const grid = document.getElementById('cenarios-grid');
   if(grid){
