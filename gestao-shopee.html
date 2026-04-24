@@ -948,12 +948,16 @@ function renderAnal(){
       <div class="fld">
         <label class="lbl">Custo total do motorista por dia (R$) — diária + refeição já inclusos</label>
         <div style="display:flex;align-items:center;gap:10px">
-          <input type="range" id="sl-mot" min="50" max="500" step="10" value="${(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
-          <input type="number" id="inp-mot" min="50" max="500" value="${(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncInput('mot',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
+          <input type="range" id="sl-mot" min="50" max="500" step="10" value="${rotaSim?.motDiaPadrao||(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncSlider('mot',this.value);calcSim()" style="flex:1;accent-color:var(--ac)">
+          <input type="number" id="inp-mot" min="50" max="500" value="${rotaSim?.motDiaPadrao||(+c.diaria||0)+(+c.valeRefeicaoDia||0)||200}" oninput="syncInput('mot',this.value);calcSim()" style="width:80px;padding:8px;border-radius:8px;font-size:14px;font-weight:700;background:var(--s2);border:1.5px solid var(--bd);color:var(--tx);text-align:center">
         </div>
       </div>
 
       <div id="sim-breakdown" style="background:var(--s2);border-radius:10px;padding:12px;font-size:12px;color:var(--t2);margin-top:4px;line-height:2"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+        <button class="btn bsm" onclick="salvarValoresNaRota()" style="flex:1">💾 Salvar valores na rota</button>
+        <div style="font-size:11px;color:var(--t2);flex:2">Salva os valores dos sliders como padrão da rota selecionada</div>
+      </div>
     </div>`;
 
   // ── Bloco 3 + 4: Diagnóstico e Equilíbrio filtrados pela rota selecionada ──
@@ -1307,6 +1311,17 @@ window.saveRota = function(idx){
 window.delRota = function(idx){
   if(!confirm('Excluir esta rota?')) return;
   DB.cfg.rotas.splice(idx,1); save(); closeModal(); render();
+};
+window.salvarValoresNaRota = function(){
+  const ri = DB.cfg.rotaSimIdx || 0;
+  if(!DB.cfg.rotas || !DB.cfg.rotas[ri]){ showToast('Nenhuma rota selecionada'); return; }
+  DB.cfg.rotas[ri].diasPadrao    = +document.getElementById('inp-dias')?.value  || 5;
+  DB.cfg.rotas[ri].pktsMediaDia  = +document.getElementById('inp-pkts')?.value  || 500;
+  DB.cfg.rotas[ri].pedagioDia    = +document.getElementById('inp-ped')?.value   || 0;
+  DB.cfg.rotas[ri].combustivelDia= +document.getElementById('inp-comb')?.value  || 0;
+  DB.cfg.rotas[ri].motDiaPadrao  = +document.getElementById('inp-mot')?.value   || 0;
+  save();
+  showToast('Valores salvos na rota ' + DB.cfg.rotas[ri].nome + '!');
 };
 function showToast(msg){ const t=document.createElement('div'); t.textContent=msg; t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1c1f27;color:#eef0f4;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;border:1px solid #272b36;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)'; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
 
