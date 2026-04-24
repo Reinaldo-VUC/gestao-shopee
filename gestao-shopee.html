@@ -963,34 +963,31 @@ function renderAnal(){
   const statsAnalise = statsArr[rotaSimIdx2]?.stats || null;
 
   // Calcula projeções usando valores configurados da rota
-  function calcProjecao(rota, dias, pkts, motDia, pedGasto){
-    const fixoDia   = +rota.fixoDia    || c.fixoDia    || 0;
-    const pedS      = +rota.pedagioShopee || c.pedagioShopee || 0;
-    const vrDia     = +c.valeRefeicaoDia || 0;
-    const valPkt    = +c.valorPacote   || 0.5;
-    const fixaMes   = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
-    const recSem    = fixoDia*dias + pedS*dias + pkts*dias*valPkt;
-    const motSem    = (motDia+vrDia)*dias;
-    const fixaSem   = fixaMes/4.3;
-    const despSem   = motSem + fixaSem;
-    const lucroSem  = recSem - despSem;
-    const sobraPed  = (pedS - pedGasto)*dias;
-    const pctMot    = recSem>0?(motSem/recSem)*100:0;
-    const pctFixa   = recSem>0?(fixaSem/recSem)*100:0;
-    const margem    = recSem>0?(lucroSem/recSem)*100:0;
-    // Ponto de equilíbrio correto:
-    // Despesas que precisam ser cobertas pelos pacotes =
-    //   Total despesas - Fixo saída (já pago pela Shopee) - Sobra pedágio (lucro extra do pedágio)
-    const fixoTotalSem   = fixoDia * dias;
-    const sobraPedSem    = sobraPed; // já calculado acima: (pedS - pedGasto) * dias
-    const despCobrir     = Math.max(0, (fixaSem + motSem + combSem) - fixoTotalSem - sobraPedSem);
-    const minPktsSem     = despCobrir > 0 ? Math.ceil(despCobrir / (valPkt * dias || 1)) : 0;
-    const sabValePena = (() => {
-      const recExtra = fixoDia + pedS + pkts*valPkt;
-      const despExtra = motDia+vrDia;
+  function calcProjecao(rota, dias, pkts, motDia, pedGasto, combustivelDia){
+    const fixoDia    = +rota.fixoDia       || c.fixoDia       || 0;
+    const pedS       = +rota.pedagioShopee || c.pedagioShopee || 0;
+    const valPkt     = +c.valorPacote      || 0.5;
+    const fixaMes    = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+    const recSem     = fixoDia*dias + pedS*dias + pkts*dias*valPkt;
+    const motSem     = motDia*dias;
+    const fixaSem    = fixaMes/4.3;
+    const combSem    = (+combustivelDia||0)*dias;
+    const despSem    = motSem + fixaSem + combSem;
+    const lucroSem   = recSem - despSem;
+    const sobraPed   = (pedS - pedGasto)*dias;
+    const pctMot     = recSem>0?(motSem/recSem)*100:0;
+    const pctFixa    = recSem>0?(fixaSem/recSem)*100:0;
+    const margem     = recSem>0?(lucroSem/recSem)*100:0;
+    const fixoTotalSem  = fixoDia * dias;
+    const sobraPedSem   = sobraPed;
+    const despCobrir    = Math.max(0, (fixaSem + motSem + combSem) - fixoTotalSem - sobraPedSem);
+    const minPktsSem    = despCobrir > 0 ? Math.ceil(despCobrir / (valPkt * dias || 1)) : 0;
+    const sabValePena   = (() => {
+      const recExtra  = fixoDia + pedS + pkts*valPkt;
+      const despExtra = motDia + (+combustivelDia||0);
       return recExtra - despExtra;
     })();
-    return {recSem,motSem,fixaSem,despSem,lucroSem,sobraPed,pctMot,pctFixa,margem,minPktsSem,sabValePena,fixaMes,pedS,dias,pkts};
+    return {recSem,motSem,fixaSem,combSem,despSem,lucroSem,sobraPed,pctMot,pctFixa,margem,minPktsSem,sabValePena,fixaMes,pedS,dias,pkts};
   }
 
   // Valores padrão para rota sem dados (usa configuração da rota ou config geral)
@@ -998,7 +995,8 @@ function renderAnal(){
   const pktsSim = rotaAnalise?.pktsMediaDia || (statsAnalise ? Math.round(statsAnalise.pktsMedia/statsAnalise.diasMedia) : 500);
   const motSim  = +c.diaria || 200;
   const pedGastoSim = +rotaAnalise?.pedagioDia || +c.pedagioDia || 0;
-  const proj = calcProjecao(rotaAnalise, diasSim, pktsSim, motSim, pedGastoSim);
+  const combSim = +rotaAnalise?.combustivelDia || 0;
+  const proj = calcProjecao(rotaAnalise, diasSim, pktsSim, motSim, pedGastoSim, combSim);
 
   // Alertas inteligentes
   const diags = [];
