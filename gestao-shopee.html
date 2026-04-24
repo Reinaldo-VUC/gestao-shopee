@@ -1067,14 +1067,15 @@ function renderAnal(){
           <div class="fw8" style="font-size:17px" id="dg-luc-ano">${R$(proj.lucroSem*52)}</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--t2);margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:10px">
+      <div id="dg-base" style="font-size:11px;color:var(--t2);margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:10px">
         <div style="margin-bottom:4px">📊 Base do cálculo: <b style="color:var(--tx)">${pktsSim} pkts/dia · ${diasSim} dias/sem · Motorista ${R$(motSim)}/dia</b></div>
         <div style="margin-bottom:4px">📋 Fixas mensais: <b style="color:var(--rd)">${R$(proj.fixaMes)}</b> → 
           ${[{nome:'Financ.', val:+c.financiamento||0},{nome:'Seguro', val:+c.seguro||0},...(c.fixasExtras||[]).map(f=>({nome:f.nome,val:+f.valor||0}))].filter(f=>f.val>0).map(f=>`${f.nome} ${R$(f.val)}`).join(' + ')||'Nenhuma'}
         </div>
         <div style="font-size:10px;color:var(--t2)">⚡ Altere os sliders do simulador acima para recalcular</div>
       </div>
-      ${diags.map(d=>`<div class="alrt ${d.tp}"><div class="aicon">${d.icon}</div><div><div class="atitle">${d.title}</div><div class="asub">${d.sub}</div></div></div>`).join('')}
+      <div id="dg-alertas">${diags.map(d=>`<div class="alrt ${d.tp}"><div class="aicon">${d.icon}</div><div><div class="atitle">${d.title}</div><div class="asub">${d.sub}</div></div></div>`).join('')}</div>
+      <div id="dg-base-info"></div>
     </div>`;
 
   // ── Bloco 4: Ponto de Equilíbrio ─────────────────────────────────
@@ -1229,6 +1230,47 @@ window.calcSim = function(){
   const minMesUpd    = Math.ceil(minPktsUpd*4.3);
   const eqSem=document.getElementById('eq-min-sem'); if(eqSem) eqSem.textContent=minPktsUpd.toLocaleString('pt-BR');
   const eqMes=document.getElementById('eq-min-mes'); if(eqMes) eqMes.textContent=minMesUpd.toLocaleString('pt-BR');
+
+  // Update alerts dinamicamente
+  const alertasEl = document.getElementById('dg-alertas');
+  if(alertasEl){
+    const pctMotUpd  = recSem>0?(motSem/recSem)*100:0;
+    const pctFixaUpd = recSem>0?(fixaSem/recSem)*100:0;
+    const margemUpd  = recSem>0?(lucroSem/recSem)*100:0;
+    const sobraUpd   = sobraPed;
+    // sábado: receita extra de 1 dia
+    const sabRec  = fixoDia + pedShopee + pkts*valPacote;
+    const sabDesp = motDia + combDia;
+    const sabVal  = sabRec - sabDesp;
+
+    const novosAlerts = [];
+    // Motorista
+    if(pctMotUpd>35) novosAlerts.push({tp:'a-rd',icon:'⚠️',title:`Custo do motorista alto (${pctMotUpd.toFixed(0)}%)`,sub:`Representa ${pctMotUpd.toFixed(0)}% da receita — ideal abaixo de 35%. Reduza a diária para melhorar a margem.`});
+    else novosAlerts.push({tp:'a-gn',icon:'✅',title:`Custo do motorista saudável (${pctMotUpd.toFixed(0)}%)`,sub:`Representa ${pctMotUpd.toFixed(0)}% da receita — dentro do ideal (< 35%)`});
+    // Fixas
+    if(pctFixaUpd>30) novosAlerts.push({tp:'a-yw',icon:'🏗️',title:`Despesas fixas pesadas (${pctFixaUpd.toFixed(0)}%)`,sub:`Fixas representam ${pctFixaUpd.toFixed(0)}% da receita semanal — avalie renegociar financiamento ou seguro`});
+    else novosAlerts.push({tp:'a-gn',icon:'✅',title:`Despesas fixas sob controle (${pctFixaUpd.toFixed(0)}%)`,sub:`Fixas representam ${pctFixaUpd.toFixed(0)}% da receita semanal`});
+    // Margem
+    if(margemUpd<0) novosAlerts.push({tp:'a-rd',icon:'🚨',title:`Operação no prejuízo! (${margemUpd.toFixed(1)}%)`,sub:'Receita não cobre as despesas — aumente volume ou reduza custos.'});
+    else if(margemUpd<10) novosAlerts.push({tp:'a-yw',icon:'📉',title:`Margem baixa (${margemUpd.toFixed(1)}%)`,sub:'Abaixo de 10% — pequena variação pode gerar prejuízo'});
+    else if(margemUpd<20) novosAlerts.push({tp:'a-yw',icon:'📊',title:`Margem razoável (${margemUpd.toFixed(1)}%)`,sub:'Entre 10% e 20% — há espaço para melhorar'});
+    else novosAlerts.push({tp:'a-gn',icon:'🎯',title:`Operação saudável (${margemUpd.toFixed(1)}% de margem)`,sub:'Excelente resultado — operação bem equilibrada'});
+    // Pedágio
+    if(sobraUpd>0) novosAlerts.push({tp:'a-gn',icon:'💛',title:`Sobra de pedágio: ${R$(sobraUpd)}/sem`,sub:`Você gasta menos pedágio do que a Shopee paga — ${R$(sobraUpd*4.3)} extras por mês`});
+    else if(sobraUpd<0) novosAlerts.push({tp:'a-rd',icon:'⛽',title:`Pedágio deficitário: ${R$(Math.abs(sobraUpd))}/sem`,sub:'Você gasta mais pedágio do que a Shopee paga'});
+    // Combustível
+    if(combDia>0) novosAlerts.push({tp:'a-bl',icon:'⛽',title:`Combustível: ${R$(combDia*dias)}/sem`,sub:`${R$(combDia)}/dia × ${dias}d — ${R$(combDia*dias*4.3)}/mês`});
+    // Sábado
+    if(sabVal>0) novosAlerts.push({tp:'a-bl',icon:'📅',title:`Trabalhar sábado vale a pena!`,sub:`Cada sábado extra gera ${R$(sabVal)} de lucro adicional`});
+    else novosAlerts.push({tp:'a-yw',icon:'📅',title:'Sábado não compensa neste cenário',sub:`O custo do dia extra (${R$(sabDesp)}) supera a receita extra (${R$(sabRec)})`});
+    // Projeção anual
+    novosAlerts.push({tp:'a-bl',icon:'💰',title:`Projeção anual: ${R$(lucroSem*52)}`,sub:`Mantendo ${pkts} pkts/dia por ${dias}d/sem — ${R$(lucroSem*4.3)} por mês`});
+
+    alertasEl.innerHTML = novosAlerts.map(a=>`<div class="alrt ${a.tp}"><div class="aicon">${a.icon}</div><div><div class="atitle">${a.title}</div><div class="asub">${a.sub}</div></div></div>`).join('');
+  }
+  // Update base info
+  const baseEl = document.getElementById('dg-base');
+  if(baseEl) baseEl.innerHTML = `<div style="margin-bottom:4px">📊 Base do cálculo: <b style="color:var(--tx)">${pkts} pkts/dia · ${dias} dias/sem · Motorista ${R$(motDia)}/dia · Combustível ${R$(combDia)}/dia</b></div><div style="font-size:10px;color:var(--t2)">⚡ Sliders sincronizados em tempo real</div>`;
 
   // Update 3 cenarios dynamically
   const grid = document.getElementById('cenarios-grid');
