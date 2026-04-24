@@ -890,15 +890,14 @@ function renderAnal(){
           </select>
         </div>`:''}
 
-      ${rotaComDados ? `
-        <div style="margin-bottom:16px">
+      <div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">
-            3 Cenários baseados na sua média atual (${pktsMediaDiaReal} pkts/dia)
+            3 Cenários — baseados nos valores dos sliders abaixo
           </div>
           <div id="cenarios-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-            <!-- preenchido por updateCenarios() -->
+            <!-- atualizado automaticamente -->
           </div>
-        </div>` : ''}
+        </div>
 
       <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Simulação livre</div>
 
