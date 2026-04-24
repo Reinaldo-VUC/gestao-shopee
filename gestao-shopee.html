@@ -1045,9 +1045,12 @@ function renderAnal(){
           <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem*52)}</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--t2);margin-bottom:12px;text-align:center">
-        Base: ${pktsSim} pkts/dia · ${diasSim} dias/sem · Motorista ${R$(motSim)}/dia
-        <br><span style="font-size:10px">⚡ Atualize os sliders do simulador para recalcular automaticamente</span>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:10px">
+        <div style="margin-bottom:4px">📊 Base do cálculo: <b style="color:var(--tx)">${pktsSim} pkts/dia · ${diasSim} dias/sem · Motorista ${R$(motSim)}/dia</b></div>
+        <div style="margin-bottom:4px">📋 Fixas mensais: <b style="color:var(--rd)">${R$(proj.fixaMes)}</b> → 
+          ${[{nome:'Financ.', val:+c.financiamento||0},{nome:'Seguro', val:+c.seguro||0},...(c.fixasExtras||[]).map(f=>({nome:f.nome,val:+f.valor||0}))].filter(f=>f.val>0).map(f=>`${f.nome} ${R$(f.val)}`).join(' + ')||'Nenhuma'}
+        </div>
+        <div style="font-size:10px;color:var(--t2)">⚡ Altere os sliders do simulador acima para recalcular</div>
       </div>
       ${diags.map(d=>`<div class="alrt ${d.tp}"><div class="aicon">${d.icon}</div><div><div class="atitle">${d.title}</div><div class="asub">${d.sub}</div></div></div>`).join('')}
     </div>`;
@@ -1160,14 +1163,26 @@ window.calcSim = function(){
   const bd  = document.getElementById('sim-breakdown');
   if(el){  el.textContent  = R$(lucroSem); el.style.color = lucroSem>=0?'var(--gn)':'var(--rd)'; }
   if(elm){ elm.textContent = R$(lucroMes); elm.style.color= lucroMes>=0?'var(--gn)':'var(--rd)'; }
+  // Detalha as fixas das configurações
+  const fixasDetalhadas = [
+    {nome:'Financiamento/Aluguel', val:+c.financiamento||0},
+    {nome:'Seguro', val:+c.seguro||0},
+    ...(c.fixasExtras||[]).map(f=>({nome:f.nome,val:+f.valor||0}))
+  ].filter(f=>f.val>0);
+
   if(bd){ bd.innerHTML = `
-    <div class="row" style="padding:5px 0"><span>💰 Receita estimada/sem</span><b style="color:var(--gn)">${R$(recSem)}</b></div>
-    <div class="row" style="padding:5px 0"><span>🏁 Fixo (${dias}d × ${R$(fixoDia)})</span><b>${R$(fixoDia*dias)}</b></div>
-    <div class="row" style="padding:5px 0"><span>🛣️ Pedágio Shopee (${dias}d)</span><b>${R$(pedShopee*dias)}</b></div>
-    <div class="row" style="padding:5px 0"><span>📦 Pacotes (${pkts}/dia × ${dias}d)</span><b>${R$(pkts*dias*valPacote)}</b></div>
-    ${sobraPed>0?`<div class="row" style="padding:5px 0"><span>💛 Sobra de pedágio</span><b style="color:var(--yw)">${R$(sobraPed)}</b></div>`:''}
-    <div class="row" style="padding:5px 0"><span>👤 Motorista</span><b style="color:var(--bl)">${R$(motSem)}</b></div>
-    <div class="row" style="padding:5px 0;border-bottom:none"><span>📋 Fixas pro-rata/sem</span><b style="color:var(--rd)">${R$(fixaSem)}</b></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📥 Receita</div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">🏁 Fixo saída (${dias}d × ${R$(fixoDia)})</span><b style="color:var(--gn)">${R$(fixoDia*dias)}</b></div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">🛣️ Pedágio Shopee (${dias}d × ${R$(pedShopee)})</span><b style="color:var(--gn)">${R$(pedShopee*dias)}</b></div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">📦 Pacotes (${pkts}/dia × ${dias}d × ${R$(valPacote)})</span><b style="color:var(--gn)">${R$(pkts*dias*valPacote)}</b></div>
+    ${sobraPed>0?`<div class="row" style="padding:4px 0"><span style="font-size:12px">💛 Sobra pedágio</span><b style="color:var(--yw)">${R$(sobraPed)}</b></div>`:''}
+    <div class="row" style="padding:4px 0"><span style="font-size:12px;font-weight:700">💰 Total receita/sem</span><b style="color:var(--gn);font-size:14px">${R$(recSem)}</b></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">📤 Despesas</div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">👤 Motorista (${dias}d × ${R$(motDia+((+c.valeRefeicaoDia)||0))})</span><b style="color:var(--bl)">${R$(motSem)}</b></div>
+    <div style="font-size:11px;color:var(--t2);padding:3px 0 3px 12px">Diária ${R$(motDia)} + Vale refeição ${R$(+c.valeRefeicaoDia||0)} = ${R$(motDia+(+c.valeRefeicaoDia||0))}/dia</div>
+    <div class="row" style="padding:4px 0"><span style="font-size:12px">📋 Fixas mensais ÷ 4,3 semanas</span><b style="color:var(--rd)">${R$(fixaSem)}</b></div>
+    ${fixasDetalhadas.map(f=>`<div style="font-size:11px;color:var(--t2);padding:2px 0 2px 12px">${f.nome}: ${R$(f.val)}/mês</div>`).join('')}
+    <div class="row" style="padding:6px 0;border-top:1px solid var(--bd);margin-top:4px"><span style="font-size:12px;font-weight:700">📤 Total despesas/sem</span><b style="color:var(--rd);font-size:14px">${R$(despSem)}</b></div>
   `; }
   // Update 3 cenarios dynamically
   const grid = document.getElementById('cenarios-grid');
