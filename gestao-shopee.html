@@ -942,61 +942,182 @@ function renderAnal(){
       <div id="sim-breakdown" style="background:var(--s2);border-radius:10px;padding:12px;font-size:12px;color:var(--t2);margin-top:4px;line-height:2"></div>
     </div>`;
 
-  // ── Bloco 3: Diagnóstico ─────────────────────────────────────────
+  // ── Bloco 3 + 4: Diagnóstico e Equilíbrio filtrados pela rota selecionada ──
+  // Estes blocos usam os valores do simulador (sliders) para a rota selecionada
+  const rotaSimIdx2 = DB.cfg.rotaSimIdx || 0;
+  const rotaAnalise = rotas[rotaSimIdx2] || rotas[0];
+  const statsAnalise = statsArr[rotaSimIdx2]?.stats || null;
+
+  // Calcula projeções usando valores configurados da rota
+  function calcProjecao(rota, dias, pkts, motDia, pedGasto){
+    const fixoDia   = +rota.fixoDia    || c.fixoDia    || 0;
+    const pedS      = +rota.pedagioShopee || c.pedagioShopee || 0;
+    const vrDia     = +c.valeRefeicaoDia || 0;
+    const valPkt    = +c.valorPacote   || 0.5;
+    const fixaMes   = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+    const recSem    = fixoDia*dias + pedS*dias + pkts*dias*valPkt;
+    const motSem    = (motDia+vrDia)*dias;
+    const fixaSem   = fixaMes/4.3;
+    const despSem   = motSem + fixaSem;
+    const lucroSem  = recSem - despSem;
+    const sobraPed  = (pedS - pedGasto)*dias;
+    const pctMot    = recSem>0?(motSem/recSem)*100:0;
+    const pctFixa   = recSem>0?(fixaSem/recSem)*100:0;
+    const margem    = recSem>0?(lucroSem/recSem)*100:0;
+    const minPktsSem = fixaSem+motSem > 0 ? Math.ceil((fixaSem+motSem)/(valPkt*dias||1)) : 0;
+    const sabValePena = (() => {
+      const recExtra = fixoDia + pedS + pkts*valPkt;
+      const despExtra = motDia+vrDia;
+      return recExtra - despExtra;
+    })();
+    return {recSem,motSem,fixaSem,despSem,lucroSem,sobraPed,pctMot,pctFixa,margem,minPktsSem,sabValePena,fixaMes,pedS,dias,pkts};
+  }
+
+  // Valores padrão para rota sem dados (usa configuração da rota ou config geral)
+  const diasSim = rotaAnalise?.diasPadrao || 5;
+  const pktsSim = rotaAnalise?.pktsMediaDia || (statsAnalise ? Math.round(statsAnalise.pktsMedia/statsAnalise.diasMedia) : 500);
+  const motSim  = +c.diaria || 200;
+  const pedGastoSim = +rotaAnalise?.pedagioDia || +c.pedagioDia || 0;
+  const proj = calcProjecao(rotaAnalise, diasSim, pktsSim, motSim, pedGastoSim);
+
+  // Alertas inteligentes
   const diags = [];
-  statsArr.forEach(({rota, stats}) => {
-    if(!stats) return;
-    const pctMot = stats.recMedia>0?(stats.motTotal/stats.semanas)/stats.recMedia*100:0;
-    if(pctMot>35) diags.push({tp:'a-rd',icon:'⚠️',title:`${rota.nome}: Custo do motorista alto`,sub:`Representa ${pctMot.toFixed(0)}% da receita — ideal abaixo de 35%`});
-    else if(pctMot>0) diags.push({tp:'a-gn',icon:'✅',title:`${rota.nome}: Custo do motorista saudável`,sub:`Representa ${pctMot.toFixed(0)}% da receita — dentro do ideal`});
-    if(stats.margem < 10 && stats.margem >= 0) diags.push({tp:'a-yw',icon:'📉',title:`${rota.nome}: Margem baixa (${stats.margem.toFixed(1)}%)`,sub:'Margem abaixo de 10% — avalie reduzir custos ou aumentar volume'});
-    if(stats.margem < 0) diags.push({tp:'a-rd',icon:'🚨',title:`${rota.nome}: Operando no prejuízo!`,sub:`Margem de ${stats.margem.toFixed(1)}% — receita não cobre as despesas`});
-    if(stats.margem >= 20) diags.push({tp:'a-gn',icon:'🎯',title:`${rota.nome}: Operação saudável`,sub:`Margem de ${stats.margem.toFixed(1)}% — excelente resultado`});
-    const projecaoAnual = stats.lucroMedia * 52;
-    diags.push({tp:'a-bl',icon:'📅',title:`${rota.nome}: Projeção anual`,sub:`Mantendo este ritmo: lucro de ${R$(projecaoAnual)} por ano`});
-  });
-  if(diags.length===0) diags.push({tp:'a-bl',icon:'💡',title:'Lance mais semanas para ver diagnósticos',sub:'O sistema analisa automaticamente quando há dados suficientes'});
+  // Motorista
+  if(proj.pctMot > 35) diags.push({tp:'a-rd',icon:'⚠️',title:'Custo do motorista alto',sub:`Representa ${proj.pctMot.toFixed(0)}% da receita — ideal abaixo de 35%. Considere reduzir a diária.`});
+  else diags.push({tp:'a-gn',icon:'✅',title:'Custo do motorista saudável',sub:`Representa ${proj.pctMot.toFixed(0)}% da receita — dentro do ideal (< 35%)`});
+  // Fixas
+  if(proj.pctFixa > 30) diags.push({tp:'a-yw',icon:'🏗️',title:'Despesas fixas pesadas',sub:`Fixas representam ${proj.pctFixa.toFixed(0)}% da receita semanal — avalie renegociar financiamento ou seguro`});
+  else diags.push({tp:'a-gn',icon:'✅',title:'Despesas fixas sob controle',sub:`Fixas representam ${proj.pctFixa.toFixed(0)}% da receita semanal`});
+  // Margem
+  if(proj.margem < 0) diags.push({tp:'a-rd',icon:'🚨',title:'Operação no prejuízo!',sub:`Margem de ${proj.margem.toFixed(1)}% — receita não cobre as despesas. Aumente o volume ou reduza custos.`});
+  else if(proj.margem < 10) diags.push({tp:'a-yw',icon:'📉',title:`Margem baixa (${proj.margem.toFixed(1)}%)`,sub:'Margem abaixo de 10% — pequena variação de volume pode gerar prejuízo'});
+  else if(proj.margem >= 20) diags.push({tp:'a-gn',icon:'🎯',title:`Operação saudável (${proj.margem.toFixed(1)}% de margem)`,sub:'Excelente resultado — operação bem equilibrada'});
+  // Pedágio
+  if(proj.sobraPed > 0) diags.push({tp:'a-gn',icon:'💛',title:`Sobra de pedágio: ${R$(proj.sobraPed)}/sem`,sub:`Você gasta menos pedágio do que a Shopee paga — ${R$(proj.sobraPed*4.3)} extras por mês`});
+  else if(proj.sobraPed < 0) diags.push({tp:'a-rd',icon:'⛽',title:`Pedágio deficitário: ${R$(Math.abs(proj.sobraPed))}/sem`,sub:'Você gasta mais pedágio do que a Shopee paga — prejuízo no pedágio'});
+  // Sábado vale a pena?
+  if(proj.sabValePena > 0) diags.push({tp:'a-bl',icon:'📅',title:`Trabalhar sábado vale a pena!`,sub:`Cada sábado extra gera ${R$(proj.sabValePena)} de lucro adicional`});
+  else diags.push({tp:'a-yw',icon:'📅',title:'Sábado não compensa neste cenário',sub:`O custo do dia extra supera a receita — verifique o volume de pacotes`});
+  // Projeção anual
+  diags.push({tp:'a-bl',icon:'💰',title:`Projeção anual: ${R$(proj.lucroSem*52)}`,sub:`Mantendo ${pktsSim} pkts/dia por ${diasSim}d/sem — ${R$(proj.lucroSem*4.3)} por mês`});
 
   const diagnostico = `
     <div class="card">
-      <div class="ct">🚨 Diagnóstico Inteligente</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="ct" style="margin-bottom:0">🚨 Diagnóstico Inteligente</div>
+        <span style="font-size:12px;color:var(--t2);font-weight:600">${rotaAnalise?.icone||'🗺️'} ${rotaAnalise?.nome||''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;text-align:center">
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita semanal</div>
+          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem)}</div>
+        </div>
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita mensal</div>
+          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem*4.3)}</div>
+        </div>
+        <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Receita anual</div>
+          <div class="fw8 c-gn" style="font-size:17px">${R$(proj.recSem*52)}</div>
+        </div>
+        <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa semanal</div>
+          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem)}</div>
+        </div>
+        <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa mensal</div>
+          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem*4.3)}</div>
+        </div>
+        <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Despesa anual</div>
+          <div class="fw8 c-rd" style="font-size:17px">${R$(proj.despSem*52)}</div>
+        </div>
+        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro semanal</div>
+          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem)}</div>
+        </div>
+        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro mensal</div>
+          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem*4.3)}</div>
+        </div>
+        <div style="background:${proj.lucroSem>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${proj.lucroSem>=0?'rgba(52,211,153,.2)':'rgba(244,63,94,.2)'};border-radius:12px;padding:14px">
+          <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Lucro anual</div>
+          <div class="fw8" style="font-size:17px;color:${proj.lucroSem>=0?'var(--gn)':'var(--rd)'}">${R$(proj.lucroSem*52)}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:12px;text-align:center">
+        Base: ${pktsSim} pkts/dia · ${diasSim} dias/sem · Motorista ${R$(motSim)}/dia
+        <br><span style="font-size:10px">⚡ Atualize os sliders do simulador para recalcular automaticamente</span>
+      </div>
       ${diags.map(d=>`<div class="alrt ${d.tp}"><div class="aicon">${d.icon}</div><div><div class="atitle">${d.title}</div><div class="asub">${d.sub}</div></div></div>`).join('')}
     </div>`;
 
   // ── Bloco 4: Ponto de Equilíbrio ─────────────────────────────────
+  const minPktsSem = proj.minPktsSem;
+  const minPktsMes = Math.ceil(minPktsSem * 4.3);
+  const pktsSemAtual = statsAnalise ? Math.round(statsAnalise.pktsMedia) : pktsSim;
+  const pktsMesAtual = Math.round(pktsSemAtual * 4.3);
+  const pctSem = minPktsSem>0 ? Math.min(150, Math.round((pktsSemAtual/minPktsSem)*100)) : 100;
+  const pctMes = minPktsMes>0 ? Math.min(150, Math.round((pktsMesAtual/minPktsMes)*100)) : 100;
+  const statusSem = pctSem>=100?{cor:'var(--gn)',txt:'✅ Acima do equilíbrio'}:pctSem>=80?{cor:'var(--yw)',txt:'⚠️ Próximo do limite'}:{cor:'var(--rd)',txt:'🚨 Abaixo do mínimo'};
+  const statusMes = pctMes>=100?{cor:'var(--gn)',txt:'✅ Acima do equilíbrio'}:pctMes>=80?{cor:'var(--yw)',txt:'⚠️ Próximo do limite'}:{cor:'var(--rd)',txt:'🚨 Abaixo do mínimo'};
+
   const equilibrio = `
     <div class="card">
-      <div class="ct">📈 Ponto de Equilíbrio</div>
-      ${statsArr.map(({rota, stats}) => {
-        if(!stats) return `<div style="font-size:13px;color:var(--t2);margin-bottom:12px">${rota.nome}: sem dados suficientes</div>`;
-        const pktsAtuais = Math.round(stats.pktsMedia);
-        const pct = stats.minPkts > 0 ? Math.min(100, Math.round((pktsAtuais/stats.minPkts)*100)) : 100;
-        const status = pct >= 100 ? {cor:'var(--gn)', txt:'✅ Acima do ponto de equilíbrio'} :
-                       pct >= 80  ? {cor:'var(--yw)', txt:'⚠️ Próximo do limite'} :
-                                    {cor:'var(--rd)', txt:'🚨 Abaixo do mínimo necessário'};
-        return `
-          <div style="margin-bottom:18px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <span class="fw8" style="font-size:14px">${rota.icone||'🗺️'} ${rota.nome}</span>
-              <span style="font-size:11px;font-weight:700;color:${status.cor}">${status.txt}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="ct" style="margin-bottom:0">📈 Ponto de Equilíbrio</div>
+        <span style="font-size:12px;color:var(--t2);font-weight:600">${rotaAnalise?.icone||'🗺️'} ${rotaAnalise?.nome||''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Por semana</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:4px">Mínimo</div>
+              <div class="fw8 c-yw" style="font-size:18px">${minPktsSem.toLocaleString('pt-BR')}</div>
+              <div style="font-size:10px;color:var(--t2)">pacotes</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-              <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
-                <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em">Mínimo de pacotes/sem</div>
-                <div class="fw8" style="font-size:20px;color:var(--yw);margin-top:4px">${stats.minPkts.toLocaleString('pt-BR')}</div>
-              </div>
-              <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
-                <div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em">Média atual/sem</div>
-                <div class="fw8" style="font-size:20px;color:${pct>=100?'var(--gn)':'var(--rd)'};margin-top:4px">${pktsAtuais.toLocaleString('pt-BR')}</div>
-              </div>
+            <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:4px">${statsAnalise?'Média real':'Simulado'}</div>
+              <div class="fw8" style="font-size:18px;color:${pctSem>=100?'var(--gn)':'var(--rd)'}">${pktsSemAtual.toLocaleString('pt-BR')}</div>
+              <div style="font-size:10px;color:var(--t2)">pacotes</div>
             </div>
-            <div style="font-size:11px;color:var(--t2);margin-bottom:6px">${pct}% do mínimo necessário</div>
-            <div style="background:var(--bd);border-radius:99px;height:10px;overflow:hidden">
-              <div style="height:100%;border-radius:99px;background:${status.cor};width:${pct}%;transition:width .6s"></div>
+          </div>
+          <div style="font-size:11px;color:var(--t2);margin-bottom:5px">${pctSem}% do mínimo · <span style="color:${statusSem.cor};font-weight:700">${statusSem.txt}</span></div>
+          <div style="background:var(--bd);border-radius:99px;height:10px;overflow:hidden">
+            <div style="height:100%;border-radius:99px;background:${statusSem.cor};width:${Math.min(100,pctSem)}%;transition:width .6s"></div>
+          </div>
+          <div style="font-size:11px;margin-top:6px;color:${pctSem>=100?'var(--gn)':'var(--rd)'}">
+            ${pctSem>=100?`+${(pktsSemAtual-minPktsSem).toLocaleString('pt-BR')} acima do mínimo`:`Faltam ${(minPktsSem-pktsSemAtual).toLocaleString('pt-BR')} pacotes`}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Por mês</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:4px">Mínimo</div>
+              <div class="fw8 c-yw" style="font-size:18px">${minPktsMes.toLocaleString('pt-BR')}</div>
+              <div style="font-size:10px;color:var(--t2)">pacotes</div>
             </div>
-            ${pct<100?`<div style="font-size:11px;color:var(--rd);margin-top:6px">Faltam ${(stats.minPkts-pktsAtuais).toLocaleString('pt-BR')} pacotes/sem para cobrir os custos</div>`:`<div style="font-size:11px;color:var(--gn);margin-top:6px">Excedente de ${(pktsAtuais-stats.minPkts).toLocaleString('pt-BR')} pacotes/sem acima do mínimo</div>`}
-          </div>`;
-      }).join('')}
+            <div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:4px">${statsAnalise?'Média real':'Simulado'}</div>
+              <div class="fw8" style="font-size:18px;color:${pctMes>=100?'var(--gn)':'var(--rd)'}">${pktsMesAtual.toLocaleString('pt-BR')}</div>
+              <div style="font-size:10px;color:var(--t2)">pacotes</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--t2);margin-bottom:5px">${pctMes}% do mínimo · <span style="color:${statusMes.cor};font-weight:700">${statusMes.txt}</span></div>
+          <div style="background:var(--bd);border-radius:99px;height:10px;overflow:hidden">
+            <div style="height:100%;border-radius:99px;background:${statusMes.cor};width:${Math.min(100,pctMes)}%;transition:width .6s"></div>
+          </div>
+          <div style="font-size:11px;margin-top:6px;color:${pctMes>=100?'var(--gn)':'var(--rd)'}">
+            ${pctMes>=100?`+${(pktsMesAtual-minPktsMes).toLocaleString('pt-BR')} acima do mínimo`:`Faltam ${(minPktsMes-pktsMesAtual).toLocaleString('pt-BR')} pacotes`}
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:12px;background:var(--s2);border-radius:10px;font-size:12px;color:var(--t2);text-align:center">
+        💡 Ponto de equilíbrio calculado com base nos valores do simulador acima.<br>
+        Altere os sliders para ver como muda o mínimo necessário.
+      </div>
     </div>`;
 
   return `
