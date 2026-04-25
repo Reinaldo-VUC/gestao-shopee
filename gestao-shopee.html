@@ -1434,10 +1434,16 @@ function modalRota(idx){
       <div class="fld"><label class="lbl">Dias padrão/sem</label><input class="inp" type="number" id="rt-dias" value="${r?.diasPadrao||5}" min="1" max="6"></div>
       <div class="fld"><label class="lbl">Pkts médios/dia</label><input class="inp" type="number" id="rt-pkts" value="${r?.pktsMediaDia||500}"></div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
+    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
       <button class="btn" onclick="saveRota(${isEdit?idx:'null'})" style="flex:2">💾 ${isEdit?'Salvar alterações':'Cadastrar rota'}</button>
       ${isEdit?`<button class="btn brd" onclick="delRota(${idx})" style="flex:1">🗑 Excluir</button>`:''}
-    </div>`;
+    </div>
+    ${isEdit?`
+    <div style="margin-top:12px;padding:12px;background:rgba(240,90,40,.07);border:1px solid rgba(240,90,40,.22);border-radius:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--ac);margin-bottom:6px">🔄 Recalcular lançamentos históricos</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:10px;line-height:1.5">Recalcula pacotes, sobra de pedágio e custo do motorista de todos os lançamentos desta rota usando os valores acima.</div>
+      <button class="btn bsm" onclick="saveRota(${idx});setTimeout(()=>recalcRota('${r?.nome||''}'),500)" style="background:var(--ac)">🔄 Salvar e Recalcular</button>
+    </div>`:''}`;
 }
 
 window.saveRota = function(idx){
@@ -1463,6 +1469,48 @@ window.delRota = function(idx){
   if(!confirm('Excluir esta rota?')) return;
   DB.cfg.rotas.splice(idx,1); save(); closeModal(); render();
 };
+// ═══════════ RECALCULAR LANÇAMENTOS DE UMA ROTA ══════════════════
+window.recalcRota = function(rotaNome){
+  const rotas = DB.cfg.rotas||[];
+  const rota  = rotas.find(r=>r.nome===rotaNome);
+  if(!rota){ showToast('Rota não encontrada'); return; }
+  if(!confirm(`Recalcular todos os lançamentos de "${rotaNome}" com:
+Fixo: R$ ${rota.fixoDia}/dia
+Pedágio Shopee: R$ ${rota.pedagioShopee}/dia
+Motorista: R$ ${rota.motDiaPadrao||'—'}/dia
+
+Confirma?`)) return;
+  let count = 0;
+  DB.semanas.forEach(s => {
+    if(s.rotaId !== rotaNome) return;
+    const d         = +s.dias||0;
+    const fixoDia   = +rota.fixoDia||0;
+    const pedShopeeDia = +rota.pedagioShopee||0;
+    const motDia    = +rota.motDiaPadrao||0;
+    const valPkt    = +DB.cfg.valorPacote||0.5;
+    const fixoTotal = fixoDia * d;
+    const pedShopee = pedShopeeDia * d;
+    const pedPago   = +s.pedPago||0;
+    const valPkts   = Math.max(0, (+s.total||0) - fixoTotal - pedShopee);
+    const pkts      = valPkt>0 ? Math.round(valPkts/valPkt) : 0;
+    const sobraPed  = pedShopee - pedPago;
+    const custoMot  = motDia * d;
+    s.fixoTotal   = fixoTotal;
+    s.pedShopee   = pedShopee;
+    s.pedShopeeDia= pedShopeeDia;
+    s.valPkts     = valPkts;
+    s.pkts        = pkts;
+    s.sobraPed    = sobraPed;
+    s.custoMot    = custoMot;
+    s.fixoDia     = fixoDia;
+    s.motDia      = motDia;
+    count++;
+  });
+  save();
+  render();
+  showToast(`✅ ${count} lançamento(s) de "${rotaNome}" recalculados!`);
+};
+
 window.salvarValoresNaRota = function(){
   const ri = DB.cfg.rotaSimIdx || 0;
   if(!DB.cfg.rotas || !DB.cfg.rotas[ri]){ showToast('Nenhuma rota selecionada'); return; }
