@@ -358,6 +358,7 @@ function subscribeData(uid){
     }
     setSyncState('ok');
     if(window.applyTheme) window.applyTheme();
+    if(window.migrateData) window.migrateData();
     if(window.render) window.render();
   }, err => { setSyncState('error'); console.error(err); });
 }
@@ -402,6 +403,19 @@ function curMA(){ const d=new Date(); return String(d.getMonth()+1).padStart(2,'
 function mALbl(ma){ if(!ma)return ''; const[m,y]=ma.split('/'); return MN[parseInt(m)-1]+' '+y; }
 function grpBy(arr){ const g={}; [...arr].reverse().forEach(x=>{ const k=mAStr(x.data); if(!g[k])g[k]=[]; g[k].push(x); }); return g; }
 function save(){ if(window.saveDB) window.saveDB(); }
+
+// ═══════════ MIGRAÇÃO AUTOMÁTICA ══════════════════════════════════
+window.migrateData=function migrateData(){
+  // Associa lançamentos sem rotaId à primeira rota cadastrada
+  const rotas = DB.cfg.rotas || [];
+  if(!rotas.length) return;
+  const primeiraRota = rotas[0];
+  let changed = false;
+  DB.semanas.forEach(s => {
+    if(!s.rotaId){ s.rotaId = primeiraRota.nome; changed = true; }
+  });
+  if(changed) save();
+};
 
 // ═══════════ THEME ════════════════════════════════════════════════
 window.applyTheme=function(){ document.body.classList.toggle('light',DB.cfg.tema==='light'); const b=document.getElementById('tbtn-mob'); if(b) b.textContent=DB.cfg.tema==='dark'?'☀️':'🌙'; }
@@ -468,33 +482,97 @@ function chartPacotes(){
 }
 
 // ═══════════ DASHBOARD ════════════════════════════════════════════
+let dashTab = 'geral';
+function computeRota(rotaNome, ma){
+  ma=ma||curMA();
+  const c=DB.cfg;
+  const sems = rotaNome==='geral'
+    ? DB.semanas.filter(s=>mAStr(s.data)===ma)
+    : DB.semanas.filter(s=>mAStr(s.data)===ma && (s.rotaId===rotaNome || (!s.rotaId && rotaNome===(DB.cfg.rotas||[])[0]?.nome)));
+  const varMes = DB.variaveis.filter(v=>mAStr(v.data)===ma);
+  const recBruta=sems.reduce((a,s)=>a+(+s.total||0),0);
+  const totPkts=sems.reduce((a,s)=>a+(+s.pkts||0),0);
+  const totDias=sems.reduce((a,s)=>a+(+s.dias||0),0);
+  const custoMot=sems.reduce((a,s)=>a+(+s.custoMot||0),0);
+  const totalFixas=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+  const totalVar=varMes.reduce((a,v)=>a+(+v.valor||0),0);
+  const totalDesp=totalFixas+totalVar+custoMot;
+  const lucro=recBruta-totalDesp;
+  const semCont=sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
+  return {recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,semCont,proj,sems};
+}
+function chartRotaReceita(rotaNome){
+  const vs=Array.from({length:6},(_,i)=>{
+    const d=new Date();d.setMonth(d.getMonth()-(5-i));
+    const k=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    const sems = rotaNome==='geral'
+      ? DB.semanas.filter(s=>mAStr(s.data)===k)
+      : DB.semanas.filter(s=>mAStr(s.data)===k&&(s.rotaId===rotaNome||(!s.rotaId&&rotaNome===(DB.cfg.rotas||[])[0]?.nome)));
+    return{label:MN[d.getMonth()],val:sems.reduce((a,s)=>a+(+s.total||0),0)};
+  });
+  const max=Math.max(...vs.map(v=>v.val),1);
+  return vs.map((v,i)=>`<div class="cbw"><div class="cb" style="height:${Math.max(4,(v.val/max)*58)}px;opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+}
+function chartRotaPkts(rotaNome){
+  const vs=Array.from({length:6},(_,i)=>{
+    const d=new Date();d.setMonth(d.getMonth()-(5-i));
+    const k=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    const sems = rotaNome==='geral'
+      ? DB.semanas.filter(s=>mAStr(s.data)===k)
+      : DB.semanas.filter(s=>mAStr(s.data)===k&&(s.rotaId===rotaNome||(!s.rotaId&&rotaNome===(DB.cfg.rotas||[])[0]?.nome)));
+    return{label:MN[d.getMonth()],val:sems.reduce((a,s)=>a+(+s.pkts||0),0)};
+  });
+  const max=Math.max(...vs.map(v=>v.val),1);
+  return vs.map((v,i)=>`<div class="cbw"><div style="font-size:8px;color:var(--yw);margin-bottom:2px;text-align:center;min-height:10px">${v.val>0?(v.val>999?(v.val/1000).toFixed(1)+'k':v.val):''}</div><div class="cb" style="height:${Math.max(4,(v.val/max)*48)}px;background:var(--yw);opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+}
+
+window.setDashTab=function(t){ dashTab=t; render(); };
+
 function renderDash(){
-  const cx=compute(),al=getAlerts(),pct=cx.recBruta>0?Math.min(100,Math.round((cx.recBruta/cx.proj)*100)):0;
+  const al=getAlerts();
+  const rotas=DB.cfg.rotas||[];
+  const cx=computeRota(dashTab);
+  const pct=cx.recBruta>0?Math.min(100,Math.round((cx.recBruta/cx.proj)*100)):0;
+
+  // Tab labels
+  const tabs=[{id:'geral',label:'🌐 Geral'},...rotas.map(r=>({id:r.nome,label:`${r.icone||'🗺️'} ${r.nome}`}))];
+
   const kpis=[
-    {label:'Receita Bruta',val:R$(cx.recBruta),color:'var(--gn)',icon:'💰',sub:`${cx.semCont} semana(s) lançada(s)`},
+    {label:'Receita Bruta',val:R$(cx.recBruta),color:'var(--gn)',icon:'💰',sub:`${cx.semCont} semana(s)`},
     {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}`},
     {label:'Lucro Líquido',val:R$(cx.lucro),color:cx.lucro>=0?'var(--gn)':'var(--rd)',icon:cx.lucro>=0?'✅':'⚠️',sub:'Receita − Despesas'},
-    {label:'Pacotes no Mês',val:(cx.totPkts||0).toLocaleString('pt-BR')+' un',color:'var(--yw)',icon:'📦',sub:R$(cx.totPkts*0.5)+' em receita de pacotes'},
+    {label:'Pacotes no Mês',val:(cx.totPkts||0).toLocaleString('pt-BR')+' un',color:'var(--yw)',icon:'📦',sub:R$(cx.totPkts*0.5)+' em receita'},
   ];
-  const rec=[...DB.semanas].reverse().slice(0,5);
+  const rec=[...cx.sems].reverse().slice(0,5);
+
   return `
     <div class="sh">
-      <div><div class="fw8 ff" style="font-size:24px">${mALbl(cx.ma)}</div><div style="font-size:13px;color:var(--t2);margin-top:2px">Visão geral do mês atual · ${cx.totDias} dias trabalhados</div></div>
+      <div><div class="fw8 ff" style="font-size:24px">${mALbl(curMA())}</div><div style="font-size:13px;color:var(--t2);margin-top:2px">${cx.totDias} dias trabalhados</div></div>
       <div style="display:flex;gap:8px">
         <button class="btn bsm" onclick="openModal('sem')">+ Semana</button>
         <button class="btn bsm bgh" onclick="openModal('var')">+ Despesa</button>
       </div>
     </div>
+
     ${al.length?`<div style="margin-bottom:16px">${al.map(a=>`<div class="alrt ${a.tp}"><div class="aicon">${a.icon}</div><div><div class="atitle">${a.title}</div><div class="asub">${a.sub}</div></div></div>`).join('')}</div>`:''}
+
+    <!-- Abas por rota -->
+    ${tabs.length>1?`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+      ${tabs.map(t=>`<button onclick="setDashTab('${t.id}')" style="padding:7px 14px;border-radius:8px;border:1.5px solid ${dashTab===t.id?'var(--ac)':'var(--bd)'};background:${dashTab===t.id?'rgba(240,90,40,.12)':'var(--s2)'};color:${dashTab===t.id?'var(--ac)':'var(--t2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif">${t.label}</button>`).join('')}
+    </div>`:''}
+
     <div class="kpi-grid">${kpis.map(k=>`<div class="kpi" style="border-left-color:${k.color}"><div class="ki">${k.icon}</div><div class="kl">${k.label}</div><div class="kv" style="color:${k.color}">${k.val}</div><div class="ks">${k.sub}</div></div>`).join('')}</div>
+
     ${cx.semCont>0?`<div class="card"><div class="ct">📈 Projeção do mês</div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><div style="font-size:11px;color:var(--t2)">Atual</div><div class="fw8 c-gn" style="font-size:16px">${R$(cx.recBruta)}</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--t2)">Projeção</div><div class="fw8 c-ac" style="font-size:16px">${R$(cx.proj)}</div></div></div><div class="pbg"><div class="pfill" style="width:${pct}%"></div></div><div style="font-size:11px;color:var(--t2)">${pct}% concluído · Média ${R$(cx.recBruta/cx.semCont)}/semana</div></div>`:''}
+
     <div class="two-col">
-      <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chartReceita()}</div></div>
-      <div class="card"><div class="ct">📦 Pacotes · Últimos 6 meses</div><div class="chw">${chartPacotes()}</div></div>
+      <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chartRotaReceita(dashTab)}</div></div>
+      <div class="card"><div class="ct">📦 Pacotes · Últimos 6 meses</div><div class="chw">${chartRotaPkts(dashTab)}</div></div>
     </div>
-    <div class="card"><div class="ct">Últimos lançamentos</div>
+
+    <div class="card"><div class="ct">Últimos lançamentos${dashTab!=='geral'?` — ${dashTab}`:''}</div>
       ${rec.length===0?`<div style="text-align:center;padding:14px 0;color:var(--t2);font-size:13px">Nenhum lançamento ainda.</div>`:
-        rec.map(s=>`<div class="row"><div><div style="font-size:13px;font-weight:600;color:var(--tx)">📦 ${(+s.pkts||0).toLocaleString('pt-BR')} pacotes · ${s.dias} dia(s) · ${s.data}</div><div style="font-size:11px;color:var(--t2)">Fixo ${R$(s.fixoTotal)} · Ped. ${R$(s.pedPago)} · Motorista ${R$(s.custoMot)}</div></div><div class="fw8 c-gn" style="font-size:15px;white-space:nowrap">${R$(s.total)}</div></div>`).join('')}
+        rec.map(s=>`<div class="row"><div><div style="font-size:13px;font-weight:600;color:var(--tx)">📦 ${(+s.pkts||0).toLocaleString('pt-BR')} pacotes · ${s.dias} dia(s) · ${s.data}${s.rotaId?` · <span style="color:var(--ac)">${s.rotaId}</span>`:''}</div><div style="font-size:11px;color:var(--t2)">Fixo ${R$(s.fixoTotal)} · Ped. ${R$(s.pedPago)} · Motorista ${R$(s.custoMot)}</div></div><div class="fw8 c-gn" style="font-size:15px;white-space:nowrap">${R$(s.total)}</div></div>`).join('')}
     </div>
     <div class="nfe-box"><div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:6px">📄 Emitir Nota Fiscal</div><div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Toda <b>segunda-feira</b>: emita a NF da semana anterior.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="https://nfe.jundiai.sp.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#fff;background:var(--ac)">🏢 NFS-e Jundiaí ↗</a><a href="https://www.nfe.fazenda.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:var(--tx);background:var(--s2)">🌐 Portal Federal ↗</a></div></div>`;
 }
@@ -610,6 +688,13 @@ function modalSem(s){
   return `
     <div class="mh"><span class="mt">${isEdit?'Editar Semana':'Lançar Semana'}</span><button class="mc" onclick="closeModal()">×</button></div>
     <div class="fld"><label class="lbl">Data de fechamento da semana</label><input class="inp" type="date" id="ms-data" value="${s?s.data:today()}"></div>
+    ${(DB.cfg.rotas||[]).length>0?`
+    <div class="fld">
+      <label class="lbl">Rota desta semana</label>
+      <select class="inp" id="ms-rota" onchange="onRotaSemChange()">
+        ${(DB.cfg.rotas||[]).map(r=>`<option value="${r.nome}" ${(s?.rotaId||DB.cfg.rotas[0]?.nome)===r.nome?'selected':''}>${r.icone||'🗺️'} ${r.nome}</option>`).join('')}
+      </select>
+    </div>`:''}
     <div class="fld">
       <label class="lbl">Dias trabalhados nesta semana</label>
       <div class="days-pick">${dias.map((d,i)=>`<button class="day-btn${(isEdit?i<selDias:i<5)?' on':''}" id="day-${i}" onclick="togDay(${i})">${d}</button>`).join('')}</div>
@@ -642,13 +727,33 @@ function modalSem(s){
     ${isEdit?`<button class="btn" onclick="updateSem('${s.id}')">💾 Salvar alterações</button>`:`<button class="btn" onclick="saveSem()">✅ Salvar semana</button>`}`;
 }
 
+function getRotaSelecionada(){
+  const sel = document.getElementById('ms-rota')?.value;
+  const rotas = DB.cfg.rotas||[];
+  return rotas.find(r=>r.nome===sel) || null;
+}
+function onRotaSemChange(){
+  const rota = getRotaSelecionada();
+  if(rota){
+    // update fixo and ped preview
+    const fEl=document.getElementById('dias-fixo');
+    const mEl=document.getElementById('dias-mot');
+    const pedEl=document.getElementById('ms-ped-dia');
+    if(fEl) fEl.textContent=R$((+rota.fixoDia||DB.cfg.fixoDia||0)*selDias);
+    if(mEl) mEl.textContent=R$((+rota.motDiaPadrao||(+DB.cfg.diaria||0)+(+DB.cfg.valeRefeicaoDia||0))*selDias);
+    if(pedEl) pedEl.value=rota.pedagioDia||DB.cfg.pedagioDia||0;
+  }
+  prevSem();
+}
 function togDay(i){
   const btn=document.getElementById('day-'+i); if(!btn)return;
   btn.classList.toggle('on'); selDias=document.querySelectorAll('.day-btn.on').length;
-  const c=DB.cfg;
+  const c=DB.cfg, rota=getRotaSelecionada();
+  const fixoDia = rota?+rota.fixoDia||c.fixoDia:c.fixoDia||0;
+  const motDia  = rota?(+rota.motDiaPadrao||(+c.diaria||0)+(+c.valeRefeicaoDia||0)):(+c.diaria||0)+(+c.valeRefeicaoDia||0);
   const dEl=document.getElementById('dias-count'); if(dEl) dEl.textContent=selDias+' dia'+(selDias!==1?'s':'');
-  const fEl=document.getElementById('dias-fixo');  if(fEl) fEl.textContent=R$((c.fixoDia||0)*selDias);
-  const mEl=document.getElementById('dias-mot');   if(mEl) mEl.textContent=R$(((c.diaria||0)+(c.valeRefeicaoDia||0))*selDias);
+  const fEl=document.getElementById('dias-fixo');  if(fEl) fEl.textContent=R$(fixoDia*selDias);
+  const mEl=document.getElementById('dias-mot');   if(mEl) mEl.textContent=R$(motDia*selDias);
   prevSem();
 }
 function prevSem(){
@@ -656,7 +761,7 @@ function prevSem(){
   const pv=document.getElementById('ms-prev'); if(!pv)return;
   if(tot<=0){pv.style.display='none';return;}
   pv.style.display='block';
-  const cx=calcSem(tot,selDias,ped);
+  const cx=calcSem(tot,selDias,ped,getRotaSelecionada());
   document.getElementById('pv-tot').textContent=R$(tot);
   document.getElementById('pv-dias-txt').textContent=selDias;
   const dt2=document.getElementById('pv-dias-txt2'); if(dt2) dt2.textContent=selDias+'d';
@@ -677,8 +782,10 @@ function saveSem(){
   const data=document.getElementById('ms-data')?.value, obs=document.getElementById('ms-obs')?.value||'';
   if(!tot){alert('Informe o valor total recebido.');return;}
   if(selDias===0){alert('Selecione ao menos um dia trabalhado.');return;}
-  const cx=calcSem(tot,selDias,ped);
-  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs});
+  const rota=getRotaSelecionada();
+  const cx=calcSem(tot,selDias,ped,rota);
+  const rotaId=rota?.nome||'';
+  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,rotaId,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:cx.motDia});
   save(); closeModal(); render();
 }
 window.editSem=id=>{ const s=DB.semanas.find(x=>x.id===id); if(!s)return; document.getElementById('mi').innerHTML=modalSem(s); document.getElementById('ov').classList.add('open'); setTimeout(prevSem,50); };
@@ -686,8 +793,10 @@ window.updateSem=id=>{
   const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
   const data=document.getElementById('ms-data')?.value, obs=document.getElementById('ms-obs')?.value||'';
   if(!tot){alert('Informe o valor total recebido.');return;}
-  const cx=calcSem(tot,selDias,ped), idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0)return;
-  DB.semanas[idx]={id,data,total:tot,dias:selDias,pedDia,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs};
+  const rota=getRotaSelecionada();
+  const cx=calcSem(tot,selDias,ped,rota), idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0)return;
+  const rotaId=rota?.nome||DB.semanas[idx].rotaId||'';
+  DB.semanas[idx]={id,data,total:tot,dias:selDias,pedDia,rotaId,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:cx.motDia};
   save(); closeModal(); render(); showToast('✅ Lançamento atualizado!');
 };
 
