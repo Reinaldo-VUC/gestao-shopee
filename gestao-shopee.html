@@ -428,7 +428,7 @@ window.migrateData=function migrateData(){
       if(Math.abs(fixoEsperado - fixoAtual) > 0.5){
         const fixoDia      = +rota.fixoDia;
         const pedShopeeDia = +rota.pedagioShopee;
-        const motDia       = +rota.motDiaPadrao||225;
+        const motDia       = +rota.motDiaPadrao||+DB.cfg.diaria||225;
         const valPkt       = +DB.cfg.valorPacote||0.5;
         const fixoTotal    = fixoDia * d;
         const pedShopee    = pedShopeeDia * d;
@@ -522,19 +522,28 @@ let dashTab = 'geral';
 function computeRota(rotaNome, ma){
   ma=ma||curMA();
   const c=DB.cfg;
+  const rotas=c.rotas||[];
   const sems = rotaNome==='geral'
     ? DB.semanas.filter(s=>mAStr(s.data)===ma)
-    : DB.semanas.filter(s=>mAStr(s.data)===ma && (s.rotaId===rotaNome || (!s.rotaId && rotaNome===(DB.cfg.rotas||[])[0]?.nome)));
+    : DB.semanas.filter(s=>mAStr(s.data)===ma && (s.rotaId===rotaNome || (!s.rotaId && rotaNome===rotas[0]?.nome)));
   const varMes = DB.variaveis.filter(v=>mAStr(v.data)===ma);
-  const recBruta=sems.reduce((a,s)=>a+(+s.total||0),0);
-  const totPkts=sems.reduce((a,s)=>a+(+s.pkts||0),0);
-  const totDias=sems.reduce((a,s)=>a+(+s.dias||0),0);
-  const custoMot=sems.reduce((a,s)=>a+(+s.custoMot||0),0);
+  const recBruta  = sems.reduce((a,s)=>a+(+s.total||0),0);
+  const totPkts   = sems.reduce((a,s)=>a+(+s.pkts||0),0);
+  const totDias   = sems.reduce((a,s)=>a+(+s.dias||0),0);
+  // custoMot: usa o valor salvo no lançamento (diária da rota × dias, calculado no momento do lançamento)
+  // Se não tiver salvo, calcula pela rota
+  const custoMot  = sems.reduce((a,s)=>{
+    if(+s.custoMot>0) return a+(+s.custoMot);
+    // fallback: tenta pegar diária da rota
+    const rota = rotas.find(r=>r.nome===s.rotaId);
+    const motDia = rota?+rota.motDiaPadrao||0:0;
+    return a + motDia*(+s.dias||0);
+  },0);
   const totalFixas=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
-  const totalVar=varMes.reduce((a,v)=>a+(+v.valor||0),0);
-  const totalDesp=totalFixas+totalVar+custoMot;
-  const lucro=recBruta-totalDesp;
-  const semCont=sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
+  const totalVar  = varMes.reduce((a,v)=>a+(+v.valor||0),0);
+  const totalDesp = totalFixas+totalVar+custoMot;
+  const lucro     = recBruta-totalDesp;
+  const semCont   = sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
   return {recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,semCont,proj,sems};
 }
 function chartRotaReceita(rotaNome){
@@ -547,7 +556,11 @@ function chartRotaReceita(rotaNome){
     return{label:MN[d.getMonth()],val:sems.reduce((a,s)=>a+(+s.total||0),0)};
   });
   const max=Math.max(...vs.map(v=>v.val),1);
-  return vs.map((v,i)=>`<div class="cbw"><div class="cb" style="height:${Math.max(4,(v.val/max)*58)}px;opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+  return vs.map((v,i)=>`<div class="cbw">
+    <div style="font-size:8px;color:var(--gn);margin-bottom:2px;text-align:center;min-height:10px;font-weight:700">${v.val>0?(v.val>=1000?'R$'+(v.val/1000).toFixed(1)+'k':'R$'+v.val.toFixed(0)):''}</div>
+    <div class="cb" style="height:${Math.max(4,(v.val/max)*50)}px;opacity:${i===5?1:.35}"></div>
+    <span class="clb">${v.label}</span>
+  </div>`).join('');
 }
 function chartRotaPkts(rotaNome){
   const vs=Array.from({length:6},(_,i)=>{
@@ -559,7 +572,11 @@ function chartRotaPkts(rotaNome){
     return{label:MN[d.getMonth()],val:sems.reduce((a,s)=>a+(+s.pkts||0),0)};
   });
   const max=Math.max(...vs.map(v=>v.val),1);
-  return vs.map((v,i)=>`<div class="cbw"><div style="font-size:8px;color:var(--yw);margin-bottom:2px;text-align:center;min-height:10px">${v.val>0?(v.val>999?(v.val/1000).toFixed(1)+'k':v.val):''}</div><div class="cb" style="height:${Math.max(4,(v.val/max)*48)}px;background:var(--yw);opacity:${i===5?1:.35}"></div><span class="clb">${v.label}</span></div>`).join('');
+  return vs.map((v,i)=>`<div class="cbw">
+    <div style="font-size:8px;color:var(--yw);margin-bottom:2px;text-align:center;min-height:10px;font-weight:700">${v.val>0?(v.val>=1000?(v.val/1000).toFixed(1)+'k':v.val):''}</div>
+    <div class="cb" style="height:${Math.max(4,(v.val/max)*50)}px;background:var(--yw);opacity:${i===5?1:.35}"></div>
+    <span class="clb">${v.label}</span>
+  </div>`).join('');
 }
 
 window.setDashTab=function(t){ dashTab=t; render(); };
@@ -657,20 +674,35 @@ function renderDesp(){
 // ═══════════ CONFIG ═══════════════════════════════════════════════
 function renderCfg(){
   const c=DB.cfg,l=c.lem||{};
+  const rotas=c.rotas||[];
   return `<div class="sh"><div class="st">Configurações</div></div>
-    <div class="two-col">
-      <div class="card"><div class="ct">🚛 Operação Shopee (por dia)</div>
-        <div class="fld"><label class="lbl">Fixo de saída por dia (R$)</label><input class="inp" type="number" value="${c.fixoDia||0}" onchange="scf('fixoDia',this.value)"></div>
-        <div class="fld"><label class="lbl">Pedágio pago pela Shopee por dia (R$)</label><input class="inp" type="number" value="${c.pedagioShopee||0}" onchange="scf('pedagioShopee',this.value)"></div>
-        <div class="fld"><label class="lbl">Valor por pacote (R$)</label><input class="inp" type="number" step="0.01" value="${c.valorPacote||0.5}" onchange="scf('valorPacote',this.value)"></div>
+
+    <!-- ROTAS -->
+    <div class="card" style="border-left:3px solid var(--ac)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="ct" style="margin-bottom:0">🗺️ Rotas Cadastradas</div>
+        <button class="btn bsm" onclick="openModal('rota')">+ Nova Rota</button>
       </div>
-      <div class="card"><div class="ct">👤 Motorista (por dia trabalhado)</div>
-        <div class="fld"><label class="lbl">Diária do motorista (R$)</label><input class="inp" type="number" value="${c.diaria||0}" onchange="scf('diaria',this.value)"></div>
-        <div class="fld"><label class="lbl">Vale refeição por dia (R$)</label><input class="inp" type="number" value="${c.valeRefeicaoDia||0}" onchange="scf('valeRefeicaoDia',this.value)"></div>
-        <div class="fld"><label class="lbl">Forma de pagamento</label><select class="inp" onchange="scf('pagamentoTipo',this.value);togAd(this.value)"><option value="mensal" ${(c.pagamentoTipo||'mensal')==='mensal'?'selected':''}>Mensal</option><option value="quinzenal" ${c.pagamentoTipo==='quinzenal'?'selected':''}>Quinzenal</option></select></div>
-        <div id="wrap-ad" style="${c.pagamentoTipo==='quinzenal'?'':'display:none'}"><div class="fld"><label class="lbl">Adiantamento (R$)</label><input class="inp" type="number" value="${c.adiantamento||0}" onchange="scf('adiantamento',this.value)"></div></div>
-      </div>
+      ${rotas.length===0?`<div style="text-align:center;padding:16px;color:var(--t2);font-size:13px">Nenhuma rota cadastrada. Cadastre uma rota para associar aos lançamentos.</div>`:''}
+      ${rotas.map((r,i)=>`
+        <div style="background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:15px;font-weight:700;color:var(--tx)">${r.icone||'🗺️'} ${r.nome}</div>
+            <button class="btn bsm bgh" onclick="openModal('editRota',${i})">✏️ Editar</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+            <div class="row" style="padding:4px 0"><span class="rl">Fixo/dia</span><span class="rv c-gn">${R$(r.fixoDia||0)}</span></div>
+            <div class="row" style="padding:4px 0"><span class="rl">Pedágio Shopee/dia</span><span class="rv c-gn">${R$(r.pedagioShopee||0)}</span></div>
+            <div class="row" style="padding:4px 0"><span class="rl">Motorista/dia</span><span class="rv c-bl">${R$(r.motDiaPadrao||0)}</span></div>
+            <div class="row" style="padding:4px 0"><span class="rl">Valor/pacote</span><span class="rv">${R$(c.valorPacote||0.5)}</span></div>
+            ${r.dataInicio?`<div class="row" style="padding:4px 0"><span class="rl">Início</span><span class="rv">${r.dataInicio}</span></div>`:''}
+            ${r.dataFim?`<div class="row" style="padding:4px 0"><span class="rl">Fim</span><span class="rv">${r.dataFim}</span></div>`:''}
+          </div>
+        </div>`).join('')}
     </div>
+
+    <!-- GERAL -->
+    <div class="two-col">
     <div class="two-col">
       <div class="card"><div class="ct">🚛 Veículo — Fixas Mensais</div>
         <div class="fld"><label class="lbl">Financiamento/Aluguel (R$)</label><input class="inp" type="number" value="${c.financiamento||0}" onchange="scf('financiamento',this.value)"></div>
@@ -953,10 +985,11 @@ function renderAnal(){
   const statsArr = rotas.map(r => ({rota:r, stats:statsRota(r)}));
   const melhor   = statsArr.filter(x=>x.stats).sort((a,b)=>(b.stats.lucroMedia||0)-(a.stats.lucroMedia||0))[0];
 
-  // ── Bloco 1: Comparativo ─────────────────────────────────────────
+  // ── Bloco 1: Comparativo — dados REAIS do dashboard ─────────────
   const comparativo = `
     <div class="card">
-      <div class="ct">📊 Comparativo de Rotas</div>
+      <div class="ct">📊 Comparativo Real de Rotas</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:12px">Baseado nos lançamentos reais — mês atual e histórico</div>
       <div style="display:grid;grid-template-columns:${rotas.map(()=>'1fr').join(' ')};gap:12px;margin-bottom:14px">
         ${rotas.map((r,i) => {
           const s = statsArr[i].stats;
@@ -1462,6 +1495,8 @@ function modalRota(idx){
       <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="rt-fixo" value="${r?.fixoDia||DB.cfg.fixoDia||0}" placeholder="${DB.cfg.fixoDia||0}"></div>
       <div class="fld"><label class="lbl">Ped.Shopee/dia (R$)</label><input class="inp" type="number" id="rt-ped" value="${r?.pedagioShopee||DB.cfg.pedagioShopee||0}" placeholder="${DB.cfg.pedagioShopee||0}"></div>
     </div>
+    <div class="fld"><label class="lbl">Diária do motorista/dia — inclui refeição (R$)</label><input class="inp" type="number" id="rt-mot" value="${r?.motDiaPadrao||0}" placeholder="Ex: 225,00"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 8px">Dados para simulação (Aba Análise)</div>
     <div class="inp-row">
       <div class="fld"><label class="lbl">Ped. gasto/dia (R$)</label><input class="inp" type="number" id="rt-pedgasto" value="${r?.pedagioDia||0}"></div>
       <div class="fld"><label class="lbl">Combustível/dia (R$)</label><input class="inp" type="number" id="rt-comb" value="${r?.combustivelDia||0}"></div>
@@ -1490,12 +1525,13 @@ window.saveRota = function(idx){
     nome, icone: document.getElementById('rt-icon')?.value||'🗺️',
     dataInicio: document.getElementById('rt-inicio')?.value||'',
     dataFim:    document.getElementById('rt-fim')?.value||'',
-    fixoDia:    +document.getElementById('rt-fixo')?.value||0,
+    fixoDia:       +document.getElementById('rt-fixo')?.value||0,
     pedagioShopee: +document.getElementById('rt-ped')?.value||0,
-    pedagioDia: +document.getElementById('rt-pedgasto')?.value||0,
-    combustivelDia: +document.getElementById('rt-comb')?.value||0,
-    diasPadrao: +document.getElementById('rt-dias')?.value||5,
-    pktsMediaDia: +document.getElementById('rt-pkts')?.value||500,
+    motDiaPadrao:  +document.getElementById('rt-mot')?.value||0,
+    pedagioDia:    +document.getElementById('rt-pedgasto')?.value||0,
+    combustivelDia:+document.getElementById('rt-comb')?.value||0,
+    diasPadrao:    +document.getElementById('rt-dias')?.value||5,
+    pktsMediaDia:  +document.getElementById('rt-pkts')?.value||500,
   };
   if(idx !== null && idx !== undefined) DB.cfg.rotas[idx] = rota;
   else DB.cfg.rotas.push(rota);
