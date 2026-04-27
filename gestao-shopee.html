@@ -1671,6 +1671,53 @@ Confirma?`)) return;
   showToast(`✅ ${count} lançamento(s) de "${rotaNome}" recalculados!`);
 };
 
+// ═══════════ SIMULAÇÃO MULTI-VEÍCULO ═════════════════════════════
+window.calcMulti = function(){
+  function gv(id){ return +document.getElementById(id)?.value||0; }
+  function calcV(p){
+    const fixo=gv(p+'-fixo'), ped=gv(p+'-ped'), pkts=gv(p+'-pkts');
+    const dias=gv(p+'-dias'), mot=gv(p+'-mot'), diesel=gv(p+'-diesel');
+    const pedG=gv(p+'-pedgasto'), parcela=gv(p+'-parcela');
+    const valPkt=+DB.cfg.valorPacote||0.5;
+    const recSem  = fixo*dias + ped*dias + pkts*dias*valPkt;
+    const despSem = mot*dias + diesel*dias + pedG*dias + parcela/4.3;
+    const lucSem  = recSem - despSem;
+    return {recSem, despSem, lucSem, lucMes:lucSem*4.3};
+  }
+  const c1=calcV('c1'), c2=calcV('c2');
+  const sv=(id,val,color)=>{ const el=document.getElementById(id); if(el){ el.textContent=R$(val); if(color) el.style.color=color; }};
+  sv('c1-rec',  c1.recSem,  'var(--gn)');
+  sv('c1-desp', c1.despSem, 'var(--rd)');
+  sv('c1-luc',  c1.lucSem,  c1.lucSem>=0?'var(--gn)':'var(--rd)');
+  sv('c1-lucmes',c1.lucMes, c1.lucMes>=0?'var(--gn)':'var(--rd)');
+  sv('c2-rec',  c2.recSem,  'var(--gn)');
+  sv('c2-desp', c2.despSem, 'var(--rd)');
+  sv('c2-luc',  c2.lucSem,  c2.lucSem>=0?'var(--gn)':'var(--rd)');
+  sv('c2-lucmes',c2.lucMes, c2.lucMes>=0?'var(--gn)':'var(--rd)');
+  const totRecMes=(c1.recSem+c2.recSem)*4.3;
+  const totDespMes=(c1.despSem+c2.despSem)*4.3;
+  const totLucMes=c1.lucMes+c2.lucMes;
+  const totLucAno=totLucMes*12;
+  const delta=totLucMes-c1.lucMes;
+  sv('tot-rec',  totRecMes,  'var(--gn)');
+  sv('tot-desp', totDespMes, 'var(--rd)');
+  sv('tot-luc',  totLucMes,  totLucMes>=0?'var(--gn)':'var(--rd)');
+  sv('tot-ano',  totLucAno,  totLucAno>=0?'var(--gn)':'var(--rd)');
+  const dEl=document.getElementById('tot-delta');
+  if(dEl){ dEl.textContent=(delta>=0?'+':'')+R$(delta)+'/mês'; dEl.style.color=delta>=0?'var(--gn)':'var(--rd)'; }
+  const aEl=document.getElementById('tot-alerta');
+  if(aEl){
+    const pct=c1.lucMes>0?Math.round((delta/c1.lucMes)*100):0;
+    if(totLucMes>=0){
+      aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(52,211,153,.1);color:var(--gn)';
+      aEl.textContent='✅ Lucro '+(pct>0?pct+'% maior':'')+' com 2 caminhões — '+R$(totLucMes)+'/mês vs '+R$(c1.lucMes)+'/mês atual';
+    } else {
+      aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(244,63,94,.1);color:var(--rd)';
+      aEl.textContent='⚠️ Operação consolidada no prejuízo — revise os valores';
+    }
+  }
+};
+
 window.salvarValoresNaRota = function(){
   const ri = DB.cfg.rotaSimIdx || 0;
   if(!DB.cfg.rotas || !DB.cfg.rotas[ri]){ showToast('Nenhuma rota selecionada'); return; }
