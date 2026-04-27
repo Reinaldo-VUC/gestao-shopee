@@ -1406,6 +1406,9 @@ function renderAnal(){
         </div>
         <div id="tot-alerta" style="margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px"></div>
       </div>
+      <div style="font-size:11px;color:var(--t2);margin-top:12px;text-align:center">
+        ✏️ Altere qualquer campo acima para recalcular em tempo real
+      </div>
     </div>`;
 
   return `
@@ -1688,7 +1691,20 @@ window.render=function render(){
   if(TAB==='dash') c.innerHTML=renderDash();
   if(TAB==='ent')  c.innerHTML=renderEnt();
   if(TAB==='desp') c.innerHTML=renderDesp();
-  if(TAB==='anal') { c.innerHTML=renderAnal(); setTimeout(()=>{ calcSim(); calcMulti(); },50); }
+  if(TAB==='anal') {
+    c.innerHTML=renderAnal();
+    setTimeout(()=>{
+      if(window.calcSim) window.calcSim();
+      if(window.calcMulti) window.calcMulti();
+      // Attach oninput to all multi fields
+      ['c1','c2'].forEach(p=>{
+        ['fixo','ped','pkts','dias','mot','diesel','pedgasto','parcela'].forEach(f=>{
+          const el=document.getElementById(p+'-'+f);
+          if(el) el.oninput=()=>window.calcMulti();
+        });
+      });
+    },150);
+  }
   if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
 </script>
