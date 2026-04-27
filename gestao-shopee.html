@@ -1324,6 +1324,90 @@ function renderAnal(){
       </div>
     </div>`;
 
+  // ── Bloco 5: Simulação Multi-Veículo ────────────────────────────
+  const multiVeiculo = `
+    <div class="card" style="border-left:3px solid var(--ac)">
+      <div class="ct">🚛🚛 Simulação Multi-Veículo</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.6">
+        Simule a operação com 2 caminhões simultaneamente. Altere os valores e veja o consolidado em tempo real.
+      </div>
+
+      <div class="two-col" style="gap:12px;margin-bottom:16px">
+        <!-- Caminhão 1 -->
+        <div style="background:var(--s2);border:1.5px solid rgba(96,165,250,.3);border-radius:14px;padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--bl);margin-bottom:12px">🚛 Caminhão 1 — Atual</div>
+          <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="c1-fixo" value="${rotaSim?.fixoDia||c.fixoDia||186.89}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pedágio Shopee/dia (R$)</label><input class="inp" type="number" id="c1-ped" value="${rotaSim?.pedagioShopee||c.pedagioShopee||42.40}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pacotes/dia</label><input class="inp" type="number" id="c1-pkts" value="900" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Dias/semana</label><input class="inp" type="number" id="c1-dias" min="1" max="6" value="6" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Motorista/dia (R$)</label><input class="inp" type="number" id="c1-mot" value="180" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Diesel/dia (R$)</label><input class="inp" type="number" id="c1-diesel" value="150.80" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pedágio gasto/dia (R$)</label><input class="inp" type="number" id="c1-pedgasto" value="31.20" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld" style="margin-bottom:0"><label class="lbl">Parcela financiamento (R$)</label><input class="inp" type="number" id="c1-parcela" value="5862" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+        </div>
+
+        <!-- Caminhão 2 -->
+        <div style="background:var(--s2);border:1.5px solid rgba(240,90,40,.3);border-radius:14px;padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:12px">🚛 Caminhão 2 — Novo</div>
+          <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="c2-fixo" value="186.89" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pedágio Shopee/dia (R$)</label><input class="inp" type="number" id="c2-ped" value="42.40" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pacotes/dia</label><input class="inp" type="number" id="c2-pkts" value="900" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Dias/semana</label><input class="inp" type="number" id="c2-dias" min="1" max="6" value="6" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Motorista/dia (R$)</label><input class="inp" type="number" id="c2-mot" value="180" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Diesel/dia (R$)</label><input class="inp" type="number" id="c2-diesel" value="150.80" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pedágio gasto/dia (R$)</label><input class="inp" type="number" id="c2-pedgasto" value="31.20" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld" style="margin-bottom:0"><label class="lbl">Parcela financiamento (R$)</label><input class="inp" type="number" id="c2-parcela" value="3500" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+        </div>
+      </div>
+
+      <!-- Resultados individuais -->
+      <div class="two-col" style="gap:12px;margin-bottom:16px">
+        <div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:12px;padding:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--bl);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">🚛 Resultado C1/semana</div>
+          <div class="row" style="padding:4px 0"><span style="font-size:12px;color:var(--t2)">Receita</span><span id="c1-rec" class="fw8 c-gn" style="font-size:13px">—</span></div>
+          <div class="row" style="padding:4px 0"><span style="font-size:12px;color:var(--t2)">Despesas</span><span id="c1-desp" class="fw8 c-rd" style="font-size:13px">—</span></div>
+          <div class="row" style="padding:4px 0;border-bottom:none"><span style="font-size:12px;color:var(--t2)">Lucro/sem</span><span id="c1-luc" class="fw8" style="font-size:14px">—</span></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
+            <div style="font-size:11px;color:var(--t2)">Lucro mensal</div>
+            <div id="c1-lucmes" class="fw8" style="font-size:16px">—</div>
+          </div>
+        </div>
+        <div style="background:rgba(240,90,40,.07);border:1px solid rgba(240,90,40,.2);border-radius:12px;padding:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">🚛 Resultado C2/semana</div>
+          <div class="row" style="padding:4px 0"><span style="font-size:12px;color:var(--t2)">Receita</span><span id="c2-rec" class="fw8 c-gn" style="font-size:13px">—</span></div>
+          <div class="row" style="padding:4px 0"><span style="font-size:12px;color:var(--t2)">Despesas</span><span id="c2-desp" class="fw8 c-rd" style="font-size:13px">—</span></div>
+          <div class="row" style="padding:4px 0;border-bottom:none"><span style="font-size:12px;color:var(--t2)">Lucro/sem</span><span id="c2-luc" class="fw8" style="font-size:14px">—</span></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
+            <div style="font-size:11px;color:var(--t2)">Lucro mensal</div>
+            <div id="c2-lucmes" class="fw8" style="font-size:16px">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Consolidado -->
+      <div style="background:linear-gradient(135deg,rgba(52,211,153,.1),rgba(240,90,40,.1));border:2px solid rgba(52,211,153,.3);border-radius:14px;padding:18px">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:14px;text-align:center;text-transform:uppercase;letter-spacing:.05em">
+          ⚡ Consolidado — 2 Caminhões
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;text-align:center">
+          <div><div style="font-size:10px;color:var(--t2);margin-bottom:3px">Receita/mês</div><div id="tot-rec" class="fw8 c-gn" style="font-size:16px">—</div></div>
+          <div><div style="font-size:10px;color:var(--t2);margin-bottom:3px">Despesas/mês</div><div id="tot-desp" class="fw8 c-rd" style="font-size:16px">—</div></div>
+          <div><div style="font-size:10px;color:var(--t2);margin-bottom:3px">Lucro/mês</div><div id="tot-luc" class="fw8" style="font-size:18px">—</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center">
+          <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px">
+            <div style="font-size:10px;color:var(--t2);margin-bottom:3px">Lucro anual</div>
+            <div id="tot-ano" class="fw8 c-gn" style="font-size:18px">—</div>
+          </div>
+          <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px">
+            <div style="font-size:10px;color:var(--t2);margin-bottom:3px">vs hoje (1 caminhão)</div>
+            <div id="tot-delta" class="fw8 c-ac" style="font-size:18px">—</div>
+          </div>
+        </div>
+        <div id="tot-alerta" style="margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px"></div>
+      </div>
+    </div>`;
+
   return `
     <div class="sh">
       <div class="st">🔍 Análise de Rotas</div>
@@ -1332,7 +1416,8 @@ function renderAnal(){
     ${comparativo}
     ${simulador}
     ${diagnostico}
-    ${equilibrio}`;
+    ${equilibrio}
+    ${multiVeiculo}`;
 }
 
 // ── Sync slider ↔ input ───────────────────────────────────────────
@@ -1603,7 +1688,7 @@ window.render=function render(){
   if(TAB==='dash') c.innerHTML=renderDash();
   if(TAB==='ent')  c.innerHTML=renderEnt();
   if(TAB==='desp') c.innerHTML=renderDesp();
-  if(TAB==='anal') { c.innerHTML=renderAnal(); setTimeout(calcSim,50); }
+  if(TAB==='anal') { c.innerHTML=renderAnal(); setTimeout(()=>{ calcSim(); calcMulti(); },50); }
   if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
 </script>
