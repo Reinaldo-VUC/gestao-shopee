@@ -1409,7 +1409,8 @@ function renderAnal(){
       <div style="font-size:11px;color:var(--t2);margin-top:12px;text-align:center">
         ✏️ Altere qualquer campo acima para recalcular em tempo real
       </div>
-    </div>`;
+    </div>
+    <script>setTimeout(function(){if(window.calcMulti)window.calcMulti();},50);</script>`;
 
   return `
     <div class="sh">
