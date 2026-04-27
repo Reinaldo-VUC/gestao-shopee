@@ -1720,15 +1720,18 @@ window.render=function render(){
     c.innerHTML=renderAnal();
     setTimeout(()=>{
       if(window.calcSim) window.calcSim();
-      if(window.calcMulti) window.calcMulti();
-      // Attach oninput to all multi fields
-      ['c1','c2'].forEach(p=>{
-        ['fixo','ped','pkts','dias','mot','diesel','pedgasto','parcela'].forEach(f=>{
-          const el=document.getElementById(p+'-'+f);
-          if(el) el.oninput=()=>window.calcMulti();
-        });
-      });
-    },150);
+      // Force calcMulti after DOM is ready
+      var tries=0;
+      var tryCalc=function(){
+        var el=document.getElementById('c1-fixo');
+        if(el){
+          if(window.calcMulti) window.calcMulti();
+        } else if(tries++<10){
+          setTimeout(tryCalc,100);
+        }
+      };
+      tryCalc();
+    },200);
   }
   if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
