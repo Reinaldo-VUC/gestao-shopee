@@ -1675,61 +1675,64 @@ Confirma?`)) return;
 window.calcMulti = function(){
   var fmt=function(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);};
   function gv(id){var el=document.getElementById(id);return el?parseFloat(el.value)||0:0;}
-  var r1=gv('c1-fixo')*gv('c1-dias')+gv('c1-ped')*gv('c1-dias')+gv('c1-pkts')*gv('c1-dias')*0.5;
-  var outrasFixas=(+DB.cfg.seguro||0)+(DB.cfg.fixasExtras||[]).reduce(function(a,x){return a+(+x.valor||0);},0);
-  var d1=gv('c1-mot')*gv('c1-dias')+gv('c1-diesel')*gv('c1-dias')+gv('c1-pedgasto')*gv('c1-dias')+(gv('c1-parcela')+outrasFixas)/4.3;
-  var l1=r1-d1; var lm1=l1*4.3;
-  var r2=gv('c2-fixo')*gv('c2-dias')+gv('c2-ped')*gv('c2-dias')+gv('c2-pkts')*gv('c2-dias')*0.5;
-  var d2=gv('c2-mot')*gv('c2-dias')+gv('c2-diesel')*gv('c2-dias')+gv('c2-pedgasto')*gv('c2-dias')+(gv('c2-parcela')+outrasFixas)/4.3;
-  var l2=r2-d2; var lm2=l2*4.3;
+
+  // Mesma lógica do calcSim para cada caminhão
+  function calcV(p){
+    var fixoDia   = gv(p+'-fixo');
+    var pedShopee = gv(p+'-ped');
+    var pkts      = gv(p+'-pkts');
+    var dias      = gv(p+'-dias');
+    var motDia    = gv(p+'-mot');
+    var combDia   = gv(p+'-diesel');
+    var pedGasto  = gv(p+'-pedgasto');
+    var parcela   = gv(p+'-parcela');
+    // receita = fixo + pedágio Shopee + pacotes (igual calcSim)
+    var recSem  = fixoDia*dias + pedShopee*dias + pkts*dias*0.5;
+    // despesas = motorista + combustível + parcela/4.3 (sem pedágio gasto — vai na sobra)
+    var fixaSem = parcela / 4.3;
+    var motSem  = motDia * dias;
+    var combSem = combDia * dias;
+    var despSem = motSem + fixaSem + combSem;
+    var lucSem  = recSem - despSem;
+    var sobraPed = (pedShopee - pedGasto) * dias;
+    return {recSem:recSem, despSem:despSem, lucSem:lucSem, lucMes:lucSem*4.3, sobraPed:sobraPed};
+  }
+
+  var c1=calcV('c1'), c2=calcV('c2');
+
   function sv(id,val,cor){var el=document.getElementById(id);if(el){el.textContent=fmt(val);if(cor)el.style.color=cor;}}
-  sv('c1-rec',r1,'var(--gn)');sv('c1-desp',d1,'var(--rd)');sv('c1-luc',l1,l1>=0?'var(--gn)':'var(--rd)');sv('c1-lucmes',lm1,lm1>=0?'var(--gn)':'var(--rd)');
-  sv('c2-rec',r2,'var(--gn)');sv('c2-desp',d2,'var(--rd)');sv('c2-luc',l2,l2>=0?'var(--gn)':'var(--rd)');sv('c2-lucmes',lm2,lm2>=0?'var(--gn)':'var(--rd)');
-  var tRec=(r1+r2)*4.3,tDesp=(d1+d2)*4.3,tLuc=lm1+lm2,tAno=tLuc*12,delta=tLuc-lm1;
-  sv('tot-rec',tRec,'var(--gn)');sv('tot-desp',tDesp,'var(--rd)');sv('tot-luc',tLuc,tLuc>=0?'var(--gn)':'var(--rd)');sv('tot-ano',tAno,tAno>=0?'var(--gn)':'var(--rd)');
+  sv('c1-rec',  c1.recSem,  'var(--gn)');
+  sv('c1-desp', c1.despSem, 'var(--rd)');
+  sv('c1-luc',  c1.lucSem,  c1.lucSem>=0?'var(--gn)':'var(--rd)');
+  sv('c1-lucmes',c1.lucMes, c1.lucMes>=0?'var(--gn)':'var(--rd)');
+  sv('c2-rec',  c2.recSem,  'var(--gn)');
+  sv('c2-desp', c2.despSem, 'var(--rd)');
+  sv('c2-luc',  c2.lucSem,  c2.lucSem>=0?'var(--gn)':'var(--rd)');
+  sv('c2-lucmes',c2.lucMes, c2.lucMes>=0?'var(--gn)':'var(--rd)');
+
+  var tRec  = (c1.recSem+c2.recSem)*4.3;
+  var tDesp = (c1.despSem+c2.despSem)*4.3;
+  var tLuc  = c1.lucMes+c2.lucMes;
+  var tAno  = tLuc*12;
+  var delta = tLuc-c1.lucMes;
+
+  sv('tot-rec',  tRec,  'var(--gn)');
+  sv('tot-desp', tDesp, 'var(--rd)');
+  sv('tot-luc',  tLuc,  tLuc>=0?'var(--gn)':'var(--rd)');
+  sv('tot-ano',  tAno,  tAno>=0?'var(--gn)':'var(--rd)');
+
   var dEl=document.getElementById('tot-delta');
   if(dEl){dEl.textContent=(delta>=0?'+':'')+fmt(delta)+'/mês';dEl.style.color=delta>=0?'var(--gn)':'var(--rd)';}
+
   var aEl=document.getElementById('tot-alerta');
-  if(aEl){var pct=lm1>0?Math.round((delta/lm1)*100):0;
-    if(tLuc>=0){aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(52,211,153,.1);color:var(--gn)';
-      aEl.textContent='✅ Lucro '+(pct>0?'+'+pct+'%':'')+' com 2 caminhões — '+fmt(tLuc)+'/mês vs '+fmt(lm1)+'/mês hoje';}
-    else{aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(244,63,94,.1);color:var(--rd)';
-      aEl.textContent='⚠️ Operação no prejuízo — revise os valores';}}
-};
-
-window.salvarValoresNaRota = function(){
-  const ri = DB.cfg.rotaSimIdx || 0;
-  if(!DB.cfg.rotas || !DB.cfg.rotas[ri]){ showToast('Nenhuma rota selecionada'); return; }
-  DB.cfg.rotas[ri].diasPadrao    = +document.getElementById('inp-dias')?.value  || 5;
-  DB.cfg.rotas[ri].pktsMediaDia  = +document.getElementById('inp-pkts')?.value  || 500;
-  DB.cfg.rotas[ri].pedagioDia    = +document.getElementById('inp-ped')?.value   || 0;
-  DB.cfg.rotas[ri].combustivelDia= +document.getElementById('inp-comb')?.value  || 0;
-  DB.cfg.rotas[ri].motDiaPadrao  = +document.getElementById('inp-mot')?.value   || 0;
-  save();
-  showToast('Valores salvos na rota ' + DB.cfg.rotas[ri].nome + '!');
-};
-function showToast(msg){ const t=document.createElement('div'); t.textContent=msg; t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1c1f27;color:#eef0f4;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;border:1px solid #272b36;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)'; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
-
-// ═══════════ RENDER ═══════════════════════════════════════════════
-function empty(t){ return `<div class="empty"><div style="font-size:44px;margin-bottom:10px">📭</div><p style="font-size:14px">${t}</p></div>`; }
-window.render=function render(){
-  const c=document.getElementById('cnt'); if(!c)return;
-  if(TAB==='dash') c.innerHTML=renderDash();
-  if(TAB==='ent')  c.innerHTML=renderEnt();
-  if(TAB==='desp') c.innerHTML=renderDesp();
-  if(TAB==='anal') {
-    c.innerHTML=renderAnal();
-    setTimeout(function(){ if(window.calcSim) window.calcSim(); }, 100);
-    setTimeout(function(){
-      // Verify DOM has the elements before calling
-      var el = document.getElementById('c1-fixo');
-      if(el && window.calcMulti){
-        window.calcMulti();
-      }
-    }, 600);
+  if(aEl){
+    var pct=c1.lucMes>0?Math.round((delta/c1.lucMes)*100):0;
+    if(tLuc>=0){
+      aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(52,211,153,.1);color:var(--gn)';
+      aEl.textContent='✅ '+(pct>0?'+'+pct+'% de lucro':'')+' com 2 caminhões — '+fmt(tLuc)+'/mês vs '+fmt(c1.lucMes)+'/mês hoje';
+    } else {
+      aEl.style.cssText='margin-top:12px;font-size:12px;text-align:center;font-weight:600;padding:8px;border-radius:8px;background:rgba(244,63,94,.1);color:var(--rd)';
+      aEl.textContent='⚠️ Operação no prejuízo — revise os valores';
+    }
   }
-  if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
-</script>
-</body>
-</html>
