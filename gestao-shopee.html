@@ -900,7 +900,7 @@ window.exportBackup=()=>{
 window.importBackup=input=>{
   const file=input.files[0]; if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{ try{ const p=JSON.parse(e.target.result); if(!p.semanas&&!p.variaveis)throw new Error(); if(!confirm('Substituir dados atuais pelo backup?'))return; DB={cfg:{...defCfg(),...p.cfg,lem:{...defCfg().lem,...(p.cfg?.lem||{})}},semanas:p.semanas||[],variaveis:p.variaveis||[]}; save(); applyTheme(); render(); showToast('✅ Backup restaurado!'); }catch(e){alert('Arquivo inválido.');} };
+  reader.onload=e=>{ try{ const p=JSON.parse(e.target.result); if(!p.semanas&&!p.variaveis)throw new Error(); if(!confirm('Substituir dados atuais pelo backup?'))return; DB={cfg:{...defCfg(),...p.cfg,lem:{...defCfg().lem,...(p.cfg?.lem||{})}},semanas:p.semanas||[],variaveis:p.variaveis||[]}; save(); if(window.applyTheme)window.applyTheme(); if(window.render)window.render(); showToast('✅ Backup restaurado!'); }catch(e){alert('Arquivo inválido.');} };
   reader.readAsText(file); input.value='';
 };
 
@@ -1736,3 +1736,44 @@ window.calcMulti = function(){
     }
   }
 }
+
+window.salvarValoresNaRota = function(){
+  const ri = DB.cfg.rotaSimIdx || 0;
+  if(!DB.cfg.rotas || !DB.cfg.rotas[ri]){ showToast('Nenhuma rota selecionada'); return; }
+  DB.cfg.rotas[ri].diasPadrao    = +document.getElementById('inp-dias')?.value  || 5;
+  DB.cfg.rotas[ri].pktsMediaDia  = +document.getElementById('inp-pkts')?.value  || 500;
+  DB.cfg.rotas[ri].pedagioDia    = +document.getElementById('inp-ped')?.value   || 0;
+  DB.cfg.rotas[ri].combustivelDia= +document.getElementById('inp-comb')?.value  || 0;
+  DB.cfg.rotas[ri].motDiaPadrao  = +document.getElementById('inp-mot')?.value   || 0;
+  save();
+  showToast('Valores salvos na rota ' + DB.cfg.rotas[ri].nome + '!');
+};
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1c1f27;color:#eef0f4;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;border:1px solid #272b36;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+
+// ═══════════ RENDER ═══════════════════════════════════════════════
+function empty(t){ return `<div class="empty"><div style="font-size:44px;margin-bottom:10px">📭</div><p style="font-size:14px">${t}</p></div>`; }
+window.render=function render(){
+  const c=document.getElementById('cnt'); if(!c)return;
+  if(TAB==='dash') c.innerHTML=renderDash();
+  if(TAB==='ent')  c.innerHTML=renderEnt();
+  if(TAB==='desp') c.innerHTML=renderDesp();
+  if(TAB==='anal') {
+    c.innerHTML=renderAnal();
+    setTimeout(function(){ if(window.calcSim) window.calcSim(); }, 100);
+    setTimeout(function(){
+      var el=document.getElementById('c1-fixo');
+      if(el && window.calcMulti) window.calcMulti();
+    }, 600);
+  }
+  if(TAB==='cfg')  c.innerHTML=renderCfg();
+}
+</script>
+</body>
+</html>
