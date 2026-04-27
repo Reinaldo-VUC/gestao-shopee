@@ -1336,8 +1336,8 @@ function renderAnal(){
         <!-- Caminhão 1 -->
         <div style="background:var(--s2);border:1.5px solid rgba(96,165,250,.3);border-radius:14px;padding:16px">
           <div style="font-size:13px;font-weight:700;color:var(--bl);margin-bottom:12px">🚛 Caminhão 1 — Atual</div>
-          <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="c1-fixo" value="${rotaSim?.fixoDia||c.fixoDia||186.89}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
-          <div class="fld"><label class="lbl">Pedágio Shopee/dia (R$)</label><input class="inp" type="number" id="c1-ped" value="${rotaSim?.pedagioShopee||c.pedagioShopee||42.40}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="c1-fixo" value="${+(rotaSim?.fixoDia||c.fixoDia||186.89)}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
+          <div class="fld"><label class="lbl">Pedágio Shopee/dia (R$)</label><input class="inp" type="number" id="c1-ped" value="${+(rotaSim?.pedagioShopee||c.pedagioShopee||42.40)}" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
           <div class="fld"><label class="lbl">Pacotes/dia</label><input class="inp" type="number" id="c1-pkts" value="900" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
           <div class="fld"><label class="lbl">Dias/semana</label><input class="inp" type="number" id="c1-dias" min="1" max="6" value="6" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
           <div class="fld"><label class="lbl">Motorista/dia (R$)</label><input class="inp" type="number" id="c1-mot" value="180" oninput="calcMulti()" style="padding:8px 10px;font-size:13px"></div>
@@ -1409,8 +1409,7 @@ function renderAnal(){
       <div style="font-size:11px;color:var(--t2);margin-top:12px;text-align:center">
         ✏️ Altere qualquer campo acima para recalcular em tempo real
       </div>
-    </div>
-    <script>setTimeout(function(){if(window.calcMulti)window.calcMulti();},50);</script>`;
+    </div>`;
 
   return `
     <div class="sh">
@@ -1719,20 +1718,14 @@ window.render=function render(){
   if(TAB==='desp') c.innerHTML=renderDesp();
   if(TAB==='anal') {
     c.innerHTML=renderAnal();
-    setTimeout(()=>{
-      if(window.calcSim) window.calcSim();
-      // Force calcMulti after DOM is ready
-      var tries=0;
-      var tryCalc=function(){
-        var el=document.getElementById('c1-fixo');
-        if(el){
-          if(window.calcMulti) window.calcMulti();
-        } else if(tries++<10){
-          setTimeout(tryCalc,100);
-        }
-      };
-      tryCalc();
-    },200);
+    setTimeout(function(){ if(window.calcSim) window.calcSim(); }, 100);
+    setTimeout(function(){
+      // Verify DOM has the elements before calling
+      var el = document.getElementById('c1-fixo');
+      if(el && window.calcMulti){
+        window.calcMulti();
+      }
+    }, 600);
   }
   if(TAB==='cfg')  c.innerHTML=renderCfg();
 }
