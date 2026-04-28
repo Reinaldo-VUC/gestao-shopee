@@ -498,6 +498,26 @@ function calcSem(total,dias,pedagio){
 function getAlerts(){
   const al=[],l=DB.cfg.lem||{},now=new Date(),dow=now.getDay(),dom=now.getDate(),mes=now.getMonth()+1;
   if(l.nfSeg&&dow===1) al.push({tp:'a-or',icon:'📄',title:'Emitir Nota Fiscal hoje!',sub:'Segunda-feira: emita e envie a NF da semana anterior.'});
+  // Alertas de pagamento do motorista fixo mensal
+  const rotas=DB.cfg.rotas||[];
+  rotas.forEach(rota=>{
+    if(rota.motTipo!=='fixo') return;
+    const ma=curMA();
+    const sabsNoMes=DB.semanas.filter(s=>mAStr(s.data)===ma&&s.rotaId===rota.nome&&s.teveSabado).length;
+    const inc=+rota.motSabInclusos||2;
+    const sabExtras=Math.max(0,sabsNoMes-inc);
+    const extraVal=sabExtras*(+rota.motSabExtra||0);
+    [
+      {dia:+rota.motPag1Dia||5,val:+rota.motPag1Val||0},
+      {dia:+rota.motPag2Dia||20,val:+rota.motPag2Val||0}
+    ].forEach(pag=>{
+      if(dom>=pag.dia-1&&dom<=pag.dia+1){
+        const total=pag.val+extraVal;
+        const quando=dom<pag.dia?'amanhã':dom===pag.dia?'hoje':'ontem';
+        al.push({tp:'a-bl',icon:'💰',title:`Pagamento motorista ${quando}! ${R$(total)}`,sub:`${rota.nome}: R$${pag.val} fixo${sabExtras>0?` + R$${extraVal} (${sabExtras} sáb. extra)`:''}` });
+      }
+    });
+  });
   if(l.salario&&(dom>=28||dom===1)) al.push({tp:'a-bl',icon:'💰',title:'Lembrete: Salário do Motorista',sub:dom===1?'Verifique o pagamento do motorista.':'Faltam poucos dias para o fechamento.'});
   if(l.ipva&&mes===+l.ipvaMes) al.push({tp:'a-yw',icon:'📋',title:'IPVA vence este mês!',sub:'Providencie o pagamento do IPVA/Licenciamento.'});
   if(l.seguro&&l.seguroVenc){const venc=new Date(l.seguroVenc+'T12:00:00'),diff=Math.ceil((venc-now)/86400000);if(diff<=30&&diff>=0) al.push({tp:'a-rd',icon:'🛡️',title:`Seguro vence em ${diff} dia(s)!`,sub:`Vencimento: ${new Date(l.seguroVenc+'T12:00:00').toLocaleDateString('pt-BR')}`});}
@@ -539,12 +559,32 @@ function computeRota(rotaNome, ma){
     const motDia = rota?+rota.motDiaPadrao||0:0;
     return a + motDia*(+s.dias||0);
   },0);
-  const totalFixas=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+  const totalFixasBase=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
   const totalVar  = varMes.reduce((a,v)=>a+(+v.valor||0),0);
+
+  // Calcula fixas proporcionais por dias corridos da rota no mês
+  function fixasPropRota(rotaNome, ma){
+    if(rotaNome==='geral') return totalFixasBase;
+    const rota = rotas.find(r=>r.nome===rotaNome);
+    if(!rota) return totalFixasBase;
+    // Descobre dias corridos do mês
+    const[mes,ano]=ma.split('/');
+    const diasNoMes=new Date(+ano,+mes,0).getDate();
+    const inicioMes=new Date(+ano,+mes-1,1);
+    const fimMes=new Date(+ano,+mes,0);
+    const inicioRota=rota.dataInicio?new Date(rota.dataInicio+'T12:00:00'):inicioMes;
+    const fimRota=rota.dataFim?new Date(rota.dataFim+'T12:00:00'):fimMes;
+    const inicio=inicioRota<inicioMes?inicioMes:inicioRota;
+    const fim=fimRota>fimMes?fimMes:fimRota;
+    const diasCorridos=Math.max(0,Math.round((fim-inicio)/86400000)+1);
+    return totalFixasBase*(diasCorridos/diasNoMes);
+  }
+
+  const totalFixas = fixasPropRota(rotaNome, ma);
   const totalDesp = totalFixas+totalVar+custoMot;
   const lucro     = recBruta-totalDesp;
   const semCont   = sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
-  return {recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,semCont,proj,sems};
+  return {recBruta,totPkts,totDias,custoMot,totalFixas,totalFixasBase,totalVar,totalDesp,lucro,semCont,proj,sems,rotaNome};
 }
 function chartRotaReceita(rotaNome){
   const vs=Array.from({length:6},(_,i)=>{
@@ -592,7 +632,7 @@ function renderDash(){
 
   const kpis=[
     {label:'Receita Bruta',val:R$(cx.recBruta),color:'var(--gn)',icon:'💰',sub:`${cx.semCont} semana(s)`},
-    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}`},
+    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.rotaNome==='geral'?R$(cx.totalFixas):R$(cx.totalFixas)+' prop.')}`},
     {label:'Lucro Líquido',val:R$(cx.lucro),color:cx.lucro>=0?'var(--gn)':'var(--rd)',icon:cx.lucro>=0?'✅':'⚠️',sub:'Receita − Despesas'},
     {label:'Pacotes no Mês',val:(cx.totPkts||0).toLocaleString('pt-BR')+' un',color:'var(--yw)',icon:'📦',sub:R$(cx.totPkts*0.5)+' em receita'},
   ];
@@ -738,6 +778,12 @@ function renderCfg(){
 }
 
 function togAd(v){ const el=document.getElementById('wrap-ad'); if(el) el.style.display=v==='quinzenal'?'block':'none'; }
+function togMotTipo(v){
+  const d=document.getElementById('wrap-mot-diaria');
+  const f=document.getElementById('wrap-mot-fixo');
+  if(d) d.style.display=v==='fixo'?'none':'block';
+  if(f) f.style.display=v==='fixo'?'block':'none';
+}
 function scf(f,v){ DB.cfg[f]=isNaN(+v)||v===''?v:+v; save(); }
 function sl(f,v){ if(!DB.cfg.lem) DB.cfg.lem={}; DB.cfg.lem[f]=v; save(); }
 function addExtra(){ const n=document.getElementById('ex-n')?.value.trim(),v=document.getElementById('ex-v')?.value; if(!n||!v)return; if(!DB.cfg.fixasExtras)DB.cfg.fixasExtras=[]; DB.cfg.fixasExtras.push({nome:n,valor:+v}); save(); refreshExtras(); document.getElementById('ex-n').value=''; document.getElementById('ex-v').value=''; }
@@ -791,9 +837,39 @@ function modalSem(s){
         <div id="pv-chk" style="margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px"></div>
       </div>
     </div>
+    ${(() => {
+      const rota = (DB.cfg.rotas||[]).find(r=>r.nome===(s?.rotaId||(DB.cfg.rotas||[])[0]?.nome));
+      if(rota?.motTipo==='fixo'){
+        // Conta sábados já lançados no mês atual para esta rota
+        const ma = curMA();
+        const sabsNoMes = DB.semanas.filter(x=>mAStr(x.data)===ma&&x.rotaId===rota.nome&&x.teveSabado&&!s?.id).length + (s?.teveSabado?1:0);
+        const inc = +rota.motSabInclusos||2;
+        return `<div class="fld" style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px">
+          <label class="lbl">🗓️ Sábado trabalhado nesta semana?</label>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button id="sab-nao" onclick="togSab(false)" style="flex:1;padding:10px;border-radius:8px;border:1.5px solid ${s?.teveSabado?'var(--bd)':'var(--ac)'};background:${s?.teveSabado?'var(--s2)':'rgba(240,90,40,.12)'};color:${s?.teveSabado?'var(--t2)':'var(--ac)'};cursor:pointer;font-weight:700;font-size:13px">Não</button>
+            <button id="sab-sim" onclick="togSab(true)" style="flex:1;padding:10px;border-radius:8px;border:1.5px solid ${s?.teveSabado?'var(--ac)':'var(--bd)'};background:${s?.teveSabado?'rgba(240,90,40,.12)':'var(--s2)'};color:${s?.teveSabado?'var(--ac)':'var(--t2)'};cursor:pointer;font-weight:700;font-size:13px">Sim</button>
+          </div>
+          <div id="sab-info" style="font-size:11px;color:var(--t2);margin-top:8px;text-align:center">
+            Sábados no mês: ${sabsNoMes} de ${inc} inclusos no fixo
+            ${sabsNoMes>inc?`<br><span style="color:var(--yw);font-weight:700">⚠️ Este é um sábado EXTRA → +${R$(rota.motSabExtra||170)}</span>`:''}
+          </div>
+        </div>`;
+      }
+      return '';
+    })()}
     <div class="fld"><label class="lbl">Observações</label><input class="inp" id="ms-obs" value="${s?s.obs||'':''}" placeholder="Opcional"></div>
     ${isEdit?`<button class="btn" onclick="updateSem('${s.id}')">💾 Salvar alterações</button>`:`<button class="btn" onclick="saveSem()">✅ Salvar semana</button>`}`;
 }
+
+let _teveSabado = false;
+window.togSab = function(val){
+  _teveSabado = val;
+  const sim = document.getElementById('sab-sim');
+  const nao = document.getElementById('sab-nao');
+  if(sim){ sim.style.borderColor=val?'var(--ac)':'var(--bd)'; sim.style.background=val?'rgba(240,90,40,.12)':'var(--s2)'; sim.style.color=val?'var(--ac)':'var(--t2)'; }
+  if(nao){ nao.style.borderColor=val?'var(--bd)':'var(--ac)'; nao.style.background=val?'var(--s2)':'rgba(240,90,40,.12)'; nao.style.color=val?'var(--t2)':'var(--ac)'; }
+};
 
 function getRotaSelecionada(){
   const sel = document.getElementById('ms-rota')?.value;
@@ -853,7 +929,18 @@ function saveSem(){
   const rota=getRotaSelecionada();
   const cx=calcSem(tot,selDias,ped,rota);
   const rotaId=rota?.nome||'';
-  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,rotaId,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:cx.custoMot,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:cx.motDia});
+  // Calcula custo motorista real (diária ou fixo mensal)
+  let custoMotReal = cx.custoMot;
+  let teveSabado = _teveSabado;
+  if(rota?.motTipo==='fixo'){
+    const ma=mAStr(data);
+    const sabsAnteriores=DB.semanas.filter(s=>mAStr(s.data)===ma&&s.rotaId===rotaId&&s.teveSabado).length;
+    const inc=+rota.motSabInclusos||2;
+    const isExtra=teveSabado&&sabsAnteriores>=inc;
+    custoMotReal=(+rota.motFixoMensal||0)/4.3+(isExtra?+rota.motSabExtra||0:0);
+  }
+  DB.semanas.push({id:uid(),data,total:tot,dias:selDias,pedDia,rotaId,teveSabado,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotReal,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:cx.motDia});
+  _teveSabado=false;
   save(); closeModal(); render();
 }
 window.editSem=id=>{ const s=DB.semanas.find(x=>x.id===id); if(!s)return; document.getElementById('mi').innerHTML=modalSem(s); document.getElementById('ov').classList.add('open'); setTimeout(prevSem,50); };
@@ -947,12 +1034,12 @@ function renderAnal(){
     const recMedia   = recTotal/semanas;
     const pktsMedia  = pktsTotal/semanas;
     const diasMedia  = diasTotal/semanas;
-    // Custo fixo mensal pro-rata por semana (4.3 semanas/mês)
-    const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
-    const fixaSem    = fixaMensal/4.3;
-    const despTotal  = motTotal + (fixaSem*semanas);
+    // Por rota individual: mostra só motorista (fixas mensais ficam no Geral)
+    const despTotal  = motTotal;
     const lucroTotal = recTotal - despTotal;
     const lucroMedia = lucroTotal/semanas;
+    const fixaMensal = (+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+    const fixaSem    = fixaMensal/4.3;
     const margem     = recTotal>0 ? (lucroTotal/recTotal)*100 : 0;
     // Ponto de equilíbrio
     const custoDiaMot = (+c.diaria||0)+(+c.valeRefeicaoDia||0);
@@ -1583,7 +1670,31 @@ function modalRota(idx){
       <div class="fld"><label class="lbl">Fixo/dia (R$)</label><input class="inp" type="number" id="rt-fixo" value="${r?.fixoDia||DB.cfg.fixoDia||0}" placeholder="${DB.cfg.fixoDia||0}"></div>
       <div class="fld"><label class="lbl">Ped.Shopee/dia (R$)</label><input class="inp" type="number" id="rt-ped" value="${r?.pedagioShopee||DB.cfg.pedagioShopee||0}" placeholder="${DB.cfg.pedagioShopee||0}"></div>
     </div>
-    <div class="fld"><label class="lbl">Diária do motorista/dia — inclui refeição (R$)</label><input class="inp" type="number" id="rt-mot" value="${r?.motDiaPadrao||0}" placeholder="Ex: 225,00"></div>
+    <div class="fld">
+      <label class="lbl">Tipo de pagamento do motorista</label>
+      <select class="inp" id="rt-mot-tipo" onchange="togMotTipo(this.value)">
+        <option value="diaria" ${(r?.motTipo||'diaria')==='diaria'?'selected':''}>💰 Diária (por dia trabalhado)</option>
+        <option value="fixo" ${r?.motTipo==='fixo'?'selected':''}>📅 Fixo Mensal</option>
+      </select>
+    </div>
+    <div id="wrap-mot-diaria" style="${r?.motTipo==='fixo'?'display:none':''}">
+      <div class="fld"><label class="lbl">Valor da diária (inclui refeição) (R$)</label><input class="inp" type="number" id="rt-mot" value="${r?.motDiaPadrao||0}" placeholder="Ex: 225,00"></div>
+    </div>
+    <div id="wrap-mot-fixo" style="${r?.motTipo==='fixo'?'':'display:none'}">
+      <div class="fld"><label class="lbl">Valor fixo mensal (R$)</label><input class="inp" type="number" id="rt-mot-fixo-val" value="${r?.motFixoMensal||4000}" placeholder="Ex: 4000,00"></div>
+      <div class="inp-row">
+        <div class="fld"><label class="lbl">Sábados inclusos/mês</label><input class="inp" type="number" id="rt-mot-sab-inc" value="${r?.motSabInclusos||2}" min="0" max="6"></div>
+        <div class="fld"><label class="lbl">Valor sábado extra (R$)</label><input class="inp" type="number" id="rt-mot-sab-extra" value="${r?.motSabExtra||170}" placeholder="Ex: 170,00"></div>
+      </div>
+      <div class="inp-row">
+        <div class="fld"><label class="lbl">Pagamento 1 — dia do mês</label><input class="inp" type="number" id="rt-mot-pag1-dia" value="${r?.motPag1Dia||5}" min="1" max="31"></div>
+        <div class="fld"><label class="lbl">Valor (R$)</label><input class="inp" type="number" id="rt-mot-pag1-val" value="${r?.motPag1Val||2000}"></div>
+      </div>
+      <div class="inp-row">
+        <div class="fld"><label class="lbl">Pagamento 2 — dia do mês</label><input class="inp" type="number" id="rt-mot-pag2-dia" value="${r?.motPag2Dia||20}" min="1" max="31"></div>
+        <div class="fld"><label class="lbl">Valor (R$)</label><input class="inp" type="number" id="rt-mot-pag2-val" value="${r?.motPag2Val||2000}"></div>
+      </div>
+    </div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 8px">Dados para simulação (Aba Análise)</div>
     <div class="inp-row">
       <div class="fld"><label class="lbl">Ped. gasto/dia (R$)</label><input class="inp" type="number" id="rt-pedgasto" value="${r?.pedagioDia||0}"></div>
@@ -1615,7 +1726,15 @@ window.saveRota = function(idx){
     dataFim:    document.getElementById('rt-fim')?.value||'',
     fixoDia:       +document.getElementById('rt-fixo')?.value||0,
     pedagioShopee: +document.getElementById('rt-ped')?.value||0,
+    motTipo:       document.getElementById('rt-mot-tipo')?.value||'diaria',
     motDiaPadrao:  +document.getElementById('rt-mot')?.value||0,
+    motFixoMensal: +document.getElementById('rt-mot-fixo-val')?.value||0,
+    motSabInclusos:+document.getElementById('rt-mot-sab-inc')?.value||2,
+    motSabExtra:   +document.getElementById('rt-mot-sab-extra')?.value||0,
+    motPag1Dia:    +document.getElementById('rt-mot-pag1-dia')?.value||5,
+    motPag1Val:    +document.getElementById('rt-mot-pag1-val')?.value||0,
+    motPag2Dia:    +document.getElementById('rt-mot-pag2-dia')?.value||20,
+    motPag2Val:    +document.getElementById('rt-mot-pag2-val')?.value||0,
     pedagioDia:    +document.getElementById('rt-pedgasto')?.value||0,
     combustivelDia:+document.getElementById('rt-comb')?.value||0,
     diasPadrao:    +document.getElementById('rt-dias')?.value||5,
