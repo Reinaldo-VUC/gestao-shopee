@@ -2430,6 +2430,75 @@ function renderFin(){
 }
 
 
+function modalEditCal(){
+  const c=DB.cfg, rotas=c.rotas||[];
+  const cal=c.calDatas||{};
+  const items=[];
+  if(+c.financiamento>0) items.push({key:'parcela_caminhao',desc:'🚛 Parcela caminhão',dia:cal.parcela_caminhao||10});
+  if(+c.seguro>0) items.push({key:'seguro_mensal',desc:'🛡️ Seguro',dia:cal.seguro_mensal||15});
+  (c.fixasExtras||[]).forEach((f,i)=>items.push({key:'fixa_'+i,desc:'📋 '+f.nome,dia:cal['fixa_'+i]||10}));
+  return `
+    <div class="mh"><span class="mt">✏️ Datas de Vencimento</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.5">
+      Configure o dia do mês em que cada conta vence para gerar alertas no momento certo.
+    </div>
+    ${items.length===0?'<div style="color:var(--t2);font-size:13px;text-align:center;padding:12px">Nenhuma despesa fixa configurada ainda.<br>Adicione em ⚙️ Config.</div>':''}
+    ${items.map(item=>`
+      <div class="fld">
+        <label class="lbl">${item.desc}</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:13px;color:var(--t2)">Vence todo dia</span>
+          <input class="inp" type="number" id="cal-${item.key}" min="1" max="31" value="${item.dia}"
+            style="width:70px;text-align:center;font-size:18px;font-weight:700">
+          <span style="font-size:13px;color:var(--t2)">do mês</span>
+        </div>
+      </div>`).join('')}
+    ${rotas.map(rota=>(rota.equipe||[]).filter(m=>m.tipo==='fixo_mensal').map(m=>`
+      <div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--bl);margin-bottom:10px">💰 ${m.nome} — ${rota.nome}</div>
+        <div class="inp-row">
+          <div class="fld"><label class="lbl">1ª parcela — dia</label>
+            <input class="inp" type="number" id="eq-p1d-${m.nome.replace(/\s/g,'_')}" min="1" max="31" value="${m.pag1Dia||5}" style="text-align:center;font-weight:700">
+          </div>
+          <div class="fld"><label class="lbl">Valor (R$)</label>
+            <input class="inp" type="number" id="eq-p1v-${m.nome.replace(/\s/g,'_')}" value="${m.pag1Val||0}">
+          </div>
+        </div>
+        <div class="inp-row">
+          <div class="fld"><label class="lbl">2ª parcela — dia</label>
+            <input class="inp" type="number" id="eq-p2d-${m.nome.replace(/\s/g,'_')}" min="1" max="31" value="${m.pag2Dia||20}" style="text-align:center;font-weight:700">
+          </div>
+          <div class="fld"><label class="lbl">Valor (R$)</label>
+            <input class="inp" type="number" id="eq-p2v-${m.nome.replace(/\s/g,'_')}" value="${m.pag2Val||0}">
+          </div>
+        </div>
+      </div>`).join('')).join('')}
+    <button class="btn" onclick="saveCalDatas()">💾 Salvar datas</button>`;
+}
+
+window.saveCalDatas=function(){
+  if(!DB.cfg.calDatas) DB.cfg.calDatas={};
+  const c=DB.cfg, rotas=c.rotas||[];
+  if(+c.financiamento>0){ const el=document.getElementById('cal-parcela_caminhao'); if(el) DB.cfg.calDatas.parcela_caminhao=+el.value||10; }
+  if(+c.seguro>0){ const el=document.getElementById('cal-seguro_mensal'); if(el) DB.cfg.calDatas.seguro_mensal=+el.value||15; }
+  (c.fixasExtras||[]).forEach((f,i)=>{ const el=document.getElementById('cal-fixa_'+i); if(el) DB.cfg.calDatas['fixa_'+i]=+el.value||10; });
+  rotas.forEach(rota=>{
+    (rota.equipe||[]).filter(m=>m.tipo==='fixo_mensal').forEach(m=>{
+      const key=m.nome.replace(/\s/g,'_');
+      const p1d=document.getElementById('eq-p1d-'+key);
+      const p1v=document.getElementById('eq-p1v-'+key);
+      const p2d=document.getElementById('eq-p2d-'+key);
+      const p2v=document.getElementById('eq-p2v-'+key);
+      if(p1d) m.pag1Dia=+p1d.value||5;
+      if(p1v) m.pag1Val=+p1v.value||0;
+      if(p2d) m.pag2Dia=+p2d.value||20;
+      if(p2v) m.pag2Val=+p2v.value||0;
+    });
+  });
+  save(); closeModal(); render();
+  showToast('✅ Datas salvas!');
+};
+
 function showToast(msg){
   const t=document.createElement('div');
   t.textContent=msg;
