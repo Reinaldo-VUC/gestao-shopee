@@ -417,50 +417,11 @@ function save(){ if(window.saveDB) window.saveDB(); }
 
 // ═══════════ MIGRAÇÃO AUTOMÁTICA ══════════════════════════════════
 window.migrateData=function migrateData(){
-  const rotas = DB.cfg.rotas || [];
+  // Apenas associa rotaId - NAO recalcula valores
+  const rotas=DB.cfg.rotas||[];
   if(!rotas.length) return;
-  const primeiraRota = rotas[0];
-  let changed = false;
-  // 1. Associa lançamentos sem rotaId à primeira rota
-  DB.semanas.forEach(s => {
-    if(!s.rotaId){ s.rotaId = primeiraRota.nome; changed = true; }
-  });
-  // 2. Recalcula automaticamente se a rota tem valores corretos configurados
-  //    mas o lançamento ainda usa valores antigos (detectado pelo fixoTotal incorreto)
-  rotas.forEach(rota => {
-    if(!rota.fixoDia || !rota.pedagioShopee) return;
-    DB.semanas.forEach(s => {
-      if(s.rotaId !== rota.nome) return;
-      const d = +s.dias||0;
-      if(!d) return;
-      const fixoEsperado = Math.round((+rota.fixoDia)*d*100)/100;
-      const fixoAtual    = Math.round((+s.fixoTotal||0)*100)/100;
-      // Se o fixo salvo não bate com o da rota, recalcula
-      if(Math.abs(fixoEsperado - fixoAtual) > 0.5){
-        const fixoDia      = +rota.fixoDia;
-        const pedShopeeDia = +rota.pedagioShopee;
-        const motDia       = +rota.motDiaPadrao||+DB.cfg.diaria||225;
-        const valPkt       = +DB.cfg.valorPacote||0.5;
-        const fixoTotal    = fixoDia * d;
-        const pedShopee    = pedShopeeDia * d;
-        const pedPago      = +s.pedPago||0;
-        const valPkts      = Math.max(0,(+s.total||0)-fixoTotal-pedShopee);
-        const pkts         = valPkt>0?Math.round(valPkts/valPkt):0;
-        const sobraPed     = pedShopee - pedPago;
-        const custoMot     = motDia * d;
-        s.fixoTotal    = fixoTotal;
-        s.pedShopee    = pedShopee;
-        s.pedShopeeDia = pedShopeeDia;
-        s.valPkts      = valPkts;
-        s.pkts         = pkts;
-        s.sobraPed     = sobraPed;
-        s.custoMot     = custoMot;
-        s.fixoDia      = fixoDia;
-        s.motDia       = motDia;
-        changed = true;
-      }
-    });
-  });
+  let changed=false;
+  DB.semanas.forEach(s=>{ if(!s.rotaId){s.rotaId=rotas[0].nome;changed=true;} });
   if(changed) save();
 };
 
@@ -506,15 +467,21 @@ function calcSem(total,dias,pedagio){
 }
 
 // ═══════════ ALERTS ═══════════════════════════════════════════════
-window.dismissAlert=function(key){
+window.undoAlert=function(key){
+  const fullKey=key+'_'+curMA();
+  DB.cfg.alertasConcluidos=(DB.cfg.alertasConcluidos||[]).filter(k=>k!==fullKey);
+  save(); render();
+};
+window.dismissAlert=function(key, acao){
   if(!DB.cfg.alertasConcluidos) DB.cfg.alertasConcluidos=[];
   const fullKey=key+'_'+curMA();
   if(!DB.cfg.alertasConcluidos.includes(fullKey)){
     DB.cfg.alertasConcluidos.push(fullKey);
-    // Keep only last 200 entries
     if(DB.cfg.alertasConcluidos.length>200) DB.cfg.alertasConcluidos=DB.cfg.alertasConcluidos.slice(-200);
     save();
   }
+  const msgs={'pago':'✅ Marcado como pago!','ignorar':'🙈 Ignorado','ok':'✓ Concluído','nf':'📄 NF marcada como emitida','feito':'✅ Feito!'};
+  showToast(msgs[acao]||'✓ Concluído');
   render();
 };
 
@@ -522,7 +489,7 @@ function getAlerts(){
   const al=[],l=DB.cfg.lem||{},now=new Date(),dow=now.getDay(),dom=now.getDate(),mes=now.getMonth()+1;
   const dismissed=DB.cfg.alertasConcluidos||[];
   function addAlert(a){ const key=(a.key||a.title)+'_'+curMA(); if(!dismissed.includes(key)) al.push(a); }
-  if(l.nfSeg&&dow===1) addAlert({tp:'a-or',icon:'📄',title:'Emitir Nota Fiscal hoje!',sub:'Segunda-feira: emita e envie a NF da semana anterior.',key:'Emitir Nota Fiscal hoje!'});
+  if(l.nfSeg&&dow===1) addAlert({tp:'a-or',icon:'📄',title:'Emitir Nota Fiscal hoje!',sub:'Segunda-feira: emita e envie a NF da semana anterior.',key:'NF Semana',acoes:[{label:'📄 Emitida'},{label:'🙈 Ignorar'}]});
   // Alertas de pagamento do motorista fixo mensal
   const rotas=DB.cfg.rotas||[];
   rotas.forEach(rota=>{
@@ -543,10 +510,10 @@ function getAlerts(){
       }
     });
   });
-  if(l.salario&&(dom>=28||dom===1)) addAlert({tp:'a-bl',icon:'💰',title:'Lembrete: Salário do Motorista',sub:dom===1?'Verifique o pagamento do motorista.':'Faltam poucos dias para o fechamento.',key:'Lembrete: Salário do Motorista'});
-  if(l.ipva&&mes===+l.ipvaMes) addAlert({tp:'a-yw',icon:'📋',title:'IPVA vence este mês!',sub:'Providencie o pagamento do IPVA/Licenciamento.',key:'IPVA vence este mês!'});
-  if(l.seguro&&l.seguroVenc){const venc=new Date(l.seguroVenc+'T12:00:00'),diff=Math.ceil((venc-now)/86400000);if(diff<=30&&diff>=0) addAlert({tp:'a-rd',icon:'🛡️',title:`Seguro vence em ${diff} dia(s)!`,sub:`Vencimento: ${new Date(l.seguroVenc+'T12:00:00').toLocaleDateString('pt-BR')}`,key:'Seguro vence'});}
-  if(l.revisao&&l.revisaoUlt){const ult=new Date(l.revisaoUlt+'T12:00:00'),prox=new Date(ult);prox.setMonth(prox.getMonth()+(+l.revisaoMeses||3));const diff=Math.ceil((prox-now)/86400000);if(diff<0) addAlert({tp:'a-rd',icon:'🔧',title:'Revisão atrasada!',sub:`Prevista: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisão atrasada!'});else if(diff<=15) addAlert({tp:'a-yw',icon:'🔧',title:`Revisão em ${diff} dia(s)`,sub:`Próxima: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisão em dias'});}
+  if(l.salario&&(dom>=28||dom===1)) addAlert({tp:'a-bl',icon:'💰',title:'Lembrete: Salário do Motorista',sub:dom===1?'Verifique o pagamento do motorista.':'Faltam poucos dias para o fechamento.',key:'Salario Motorista',acoes:[{label:'💰 Pago'},{label:'🙈 Ignorar'}]});
+  if(l.ipva&&mes===+l.ipvaMes) addAlert({tp:'a-yw',icon:'📋',title:'IPVA vence este mês!',sub:'Providencie o pagamento do IPVA/Licenciamento.',key:'IPVA Mes',acoes:[{label:'💰 Pago'},{label:'🙈 Ignorar'}]});
+  if(l.seguro&&l.seguroVenc){const venc=new Date(l.seguroVenc+'T12:00:00'),diff=Math.ceil((venc-now)/86400000);if(diff<=30&&diff>=0) addAlert({tp:'a-rd',icon:'🛡️',title:`Seguro vence em ${diff} dia(s)!`,sub:`Vencimento: ${new Date(l.seguroVenc+'T12:00:00').toLocaleDateString('pt-BR')}`,key:'Seguro Vence',acoes:[{label:'💰 Pago'},{label:'📅 Renovado'},{label:'🙈 Ignorar'}]});}
+  if(l.revisao&&l.revisaoUlt){const ult=new Date(l.revisaoUlt+'T12:00:00'),prox=new Date(ult);prox.setMonth(prox.getMonth()+(+l.revisaoMeses||3));const diff=Math.ceil((prox-now)/86400000);if(diff<0) addAlert({tp:'a-rd',icon:'🔧',title:'Revisão atrasada!',sub:`Prevista: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisao Atrasada',acoes:[{label:'🔧 Feita'},{label:'📅 Reagendar'},{label:'🙈 Ignorar'}]});else if(diff<=15) addAlert({tp:'a-yw',icon:'🔧',title:`Revisão em ${diff} dia(s)`,sub:`Próxima: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisao Proxima',acoes:[{label:'🔧 Feita'},{label:'🙈 Ignorar'}]});}
   return al;
 }
 
@@ -673,7 +640,9 @@ function renderDash(){
       </div>
     </div>
 
-    ${al.length?`<div style="margin-bottom:16px">${al.map(a=>`<div class="alrt ${a.tp}" style="display:flex;align-items:flex-start;gap:10px"><div class="aicon">${a.icon}</div><div style="flex:1"><div class="atitle">${a.title}</div><div class="asub">${a.sub}</div></div><button onclick="dismissAlert('${a.key||a.title}')" title="Marcar como concluído" style="background:rgba(255,255,255,.1);border:none;border-radius:6px;cursor:pointer;font-size:13px;padding:3px 8px;color:inherit;flex-shrink:0;font-weight:700">✓</button></div>`).join('')}</div>`:''}
+    ${al.length?`<div style="margin-bottom:16px">${al.map(a=>`<div class="alrt ${a.tp}" style="display:flex;align-items:flex-start;gap:10px"><div class="aicon">${a.icon}</div><div style="flex:1"><div class="atitle">${a.title}</div><div class="asub">${a.sub}</div></div><div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          ${a.acoes?a.acoes.map(ac=>`<button onclick="dismissAlert('${a.key||a.title}','${ac.label}')" style="background:rgba(255,255,255,.12);border:none;border-radius:6px;cursor:pointer;font-size:11px;padding:3px 8px;color:inherit;font-weight:700;white-space:nowrap">${ac.label}</button>`).join(''):`<button onclick="dismissAlert('${a.key||a.title}','ok')" style="background:rgba(255,255,255,.12);border:none;border-radius:6px;cursor:pointer;font-size:11px;padding:3px 8px;color:inherit;font-weight:700">✓ Ok</button>`}
+        </div></div>`).join('')}</div>`:''}
 
     <!-- Abas por rota -->
     ${tabs.length>1?`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
@@ -2069,6 +2038,50 @@ function renderFin(){
       <select class="inp" style="width:auto" onchange="setFinMes(this.value)">
         ${meses.map(m=>`<option value="${m}" ${m===finMes?'selected':''}>${mALbl(m)}</option>`).join('')}
       </select>
+    </div>
+
+    <!-- Calendário de Pagamentos -->
+    <div class="card" style="border-left:3px solid var(--bl)">
+      <div class="ct">📅 Calendário de Pagamentos — ${mALbl(finMes)}</div>
+      ${(()=>{
+        const items=[];
+        const dismissed=DB.cfg.alertasConcluidos||[];
+        // Parcela caminhão
+        if(+c.financiamento>0) items.push({dia:10,desc:'🚛 Parcela caminhão',val:+c.financiamento,key:'parcela_caminhao',cor:'var(--rd)'});
+        if(+c.seguro>0) items.push({dia:15,desc:'🛡️ Seguro',val:+c.seguro,key:'seguro_mensal',cor:'var(--yw)'});
+        (c.fixasExtras||[]).forEach((f,i)=>items.push({dia:10,desc:'📋 '+f.nome,val:+f.valor,key:'fixa_'+i,cor:'var(--rd)'}));
+        // Equipe
+        rotas.forEach(rota=>{
+          (rota.equipe||[]).forEach(m=>{
+            if(m.tipo==='fixo_mensal'){
+              const sabsNoMes=DB.semanas.filter(s=>mAStr(s.data)===finMes&&s.rotaId===rota.nome&&s.teveSabado).length;
+              const sabExtras=Math.max(0,sabsNoMes-(+m.sabInclusos||2));
+              const extraVal=sabExtras*(+m.sabExtra||0);
+              if(m.pag1Dia) items.push({dia:+m.pag1Dia,desc:'💰 '+m.nome+' (1ª quinzena)',val:(+m.pag1Val||0),extra:extraVal,key:'mot_'+m.nome+'_1',cor:'var(--bl)'});
+              if(m.pag2Dia) items.push({dia:+m.pag2Dia,desc:'💰 '+m.nome+' (2ª quinzena)',val:(+m.pag2Val||0),key:'mot_'+m.nome+'_2',cor:'var(--bl)'});
+            }
+          });
+        });
+        items.sort((a,b)=>a.dia-b.dia);
+        if(!items.length) return '<div style="color:var(--t2);font-size:13px;text-align:center;padding:12px">Nenhum pagamento cadastrado. Configure rotas e despesas fixas.</div>';
+        const total=items.reduce((a,x)=>a+(x.val||0)+(x.extra||0),0);
+        return items.map(item=>{
+          const paidKey=item.key+'_'+finMes;
+          const paid=dismissed.includes(paidKey);
+          return `<div class="item" style="opacity:${paid?0.5:1}">
+            <div style="min-width:36px;font-size:13px;font-weight:800;color:var(--t2);text-align:center">dia<br>${item.dia}</div>
+            <div style="flex:1;margin-left:10px">
+              <div class="itx" style="${paid?'text-decoration:line-through':''}"><span style="color:${item.cor}">${item.desc}</span></div>
+              <div class="isb">${R$(item.val)}${item.extra?` + ${R$(item.extra)} sáb.extra`:''}${paid?' — <span style="color:var(--gn)">✅ Pago</span>':''}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+              <span class="fw8" style="color:${item.cor};font-size:14px">${R$((item.val||0)+(item.extra||0))}</span>
+              ${!paid?`<button onclick="dismissAlert('${item.key}','pago')" style="background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);border-radius:6px;cursor:pointer;font-size:11px;padding:3px 8px;color:var(--gn);font-weight:700">💰 Pago</button>`:`<button onclick="undoAlert('${item.key}')" style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;cursor:pointer;font-size:11px;padding:3px 8px;color:var(--t2)">↩ Desfazer</button>`}
+            </div>
+          </div>`;
+        }).join('')+
+        `<div style="display:flex;justify-content:space-between;padding:10px 0;margin-top:4px;border-top:1px solid var(--bd)"><span class="fw8">Total a pagar no mês</span><span class="fw8 c-rd" style="font-size:16px">${R$(total)}</span></div>`;
+      })()}
     </div>
 
     <!-- KPIs -->
