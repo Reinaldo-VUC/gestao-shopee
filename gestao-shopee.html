@@ -2136,6 +2136,7 @@ function renderFin(){
   if(!meses.includes(finMes)) finMes=meses[0]||mCur;
 
   const f=calcFinanceiro(finMes);
+  const fixaMensal=f.fixaMensal;
   const dismissed=c.alertasConcluidos||[];
   const calDatas=c.calDatas||{};
 
