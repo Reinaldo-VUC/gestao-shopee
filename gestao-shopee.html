@@ -352,6 +352,7 @@ function subscribeData(uid){
   setSyncState('syncing');
   const ref = doc(db, 'users', uid);
   unsubSnap = onSnapshot(ref, snap => {
+    if(_isSaving){ _isSaving=false; return; } // skip durante save
     if(snap.exists()){
       const remote = snap.data();
       DB.semanas   = remote.semanas   || [];
@@ -374,17 +375,21 @@ function subscribeData(uid){
   }, err => { setSyncState('error'); console.error(err); });
 }
 
+let _isSaving = false;
 window.saveDB = async () => {
   if(!currentUser) return;
+  _isSaving = true;
   setSyncState('syncing');
   try {
-    await setDoc(doc(db,'users',currentUser.uid), {
-      semanas:   DB.semanas,
-      variaveis: DB.variaveis,
-      cfg:       DB.cfg
-    });
+    // Snapshot dos dados no momento do save
+    const dataToSave = {
+      semanas:   JSON.parse(JSON.stringify(DB.semanas)),
+      variaveis: JSON.parse(JSON.stringify(DB.variaveis)),
+      cfg:       JSON.parse(JSON.stringify(DB.cfg))
+    };
+    await setDoc(doc(db,'users',currentUser.uid), dataToSave);
     setSyncState('ok');
-  } catch(e){ setSyncState('error'); console.error(e); }
+  } catch(e){ setSyncState('error'); console.error(e); } finally { _isSaving=false; }
 };
 
 function setSyncState(state){
