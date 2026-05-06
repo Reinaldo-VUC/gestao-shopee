@@ -1032,7 +1032,8 @@ function prevSem(){
   document.getElementById('pv-dias-txt').textContent=selDias;
   const dt2=document.getElementById('pv-dias-txt2'); if(dt2) dt2.textContent=selDias+'d';
   document.getElementById('pv-fixo').textContent='− '+R$(cx.fixoTotal);
-  document.getElementById('pv-ped').textContent='− '+R$(cx.pedShopee)+' (Shopee: '+selDias+'d × '+R$(DB.cfg.pedagioShopee||0)+')';
+    const rotaDisp=getRotaSelecionada();
+  document.getElementById('pv-ped').textContent='− '+R$(cx.pedShopee)+' (Shopee: '+selDias+'d × '+R$(rotaDisp?.pedagioShopee||0)+')';
   document.getElementById('pv-ped-gasto').textContent=R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
   document.getElementById('pv-vpkt').textContent=R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent=cx.pkts.toLocaleString('pt-BR')+' pacotes';
@@ -1961,8 +1962,18 @@ window.saveRota = function(idx){
     diasPadrao:    +document.getElementById('rt-dias')?.value||5,
     pktsMediaDia:  +document.getElementById('rt-pkts')?.value||500,
   };
-  if(idx !== null && idx !== undefined) DB.cfg.rotas[idx] = rota;
-  else DB.cfg.rotas.push(rota);
+  // Preserva equipe e ganhos existentes ao salvar
+  if(idx !== null && idx !== undefined){
+    const existing = DB.cfg.rotas[idx] || {};
+    rota.equipe  = existing.equipe  || [];
+    rota.ganhos  = existing.ganhos  || [];
+    rota.motDiaPadrao = rota.motDiaPadrao || existing.motDiaPadrao || 0;
+    DB.cfg.rotas[idx] = rota;
+  } else {
+    rota.equipe = [];
+    rota.ganhos = [];
+    DB.cfg.rotas.push(rota);
+  }
   save(); closeModal(); render(); showToast('✅ Rota salva!');
 };
 window.delRota = function(idx){
