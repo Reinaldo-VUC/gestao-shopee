@@ -1029,7 +1029,11 @@ window.refreshEquipeModal=function(rotaNome){
 
   // Update the equipe container in modal
   const eqContainer=document.getElementById('ms-equipe-container');
-  if(eqContainer) eqContainer.innerHTML=eqHtml+gnHtml;
+  if(eqContainer){
+    eqContainer.innerHTML=eqHtml+gnHtml;
+    // Recalculate preview after equipe loads
+    setTimeout(prevSem, 30);
+  }
 };
 
 function onRotaSemChange(){
@@ -1085,6 +1089,7 @@ function prevSem(){
   if(equipePrev.length>0){
     equipePrev.forEach((m,i)=>{
       const el=document.getElementById('eq-ativo-'+i);
+      // Se o checkbox não existe ainda, trata como ativo por padrão
       if(el&&!el.checked) return;
       if(m.tipo==='fixo_mensal'){ custoMotPreview+=(+m.fixoMensal||0)/4.3; }
       else {
@@ -1094,8 +1099,14 @@ function prevSem(){
     });
   } else if(rotaPrev?.motTipo==='fixo'){
     custoMotPreview=(+rotaPrev.motFixoMensal||0)/4.3;
-  } else {
-    custoMotPreview=(+rotaPrev?.motDiaPadrao||0)*selDias;
+  } else if(rotaPrev?.motDiaPadrao){
+    custoMotPreview=(+rotaPrev.motDiaPadrao||0)*selDias;
+  }
+  // If still 0, check if any equipe member is fixo_mensal even without checkboxes
+  if(custoMotPreview===0 && equipePrev.length>0){
+    equipePrev.forEach(m=>{
+      if(m.tipo==='fixo_mensal') custoMotPreview+=(+m.fixoMensal||0)/4.3;
+    });
   }
   document.getElementById('pv-mot').textContent=R$(custoMotPreview);
   const chk=document.getElementById('pv-chk');
