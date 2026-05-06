@@ -458,17 +458,21 @@ function compute(ma){
   const semCont=semMes.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
   return {ma,semMes,varMes,recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,custoPkt,semCont,proj};
 }
-function calcSem(total,dias,pedagio){
+function calcSem(total,dias,pedagio,rota){
+  // Usa SOMENTE valores da rota selecionada - nunca config global
   const c=DB.cfg, d=+dias||0;
-  const fixoTotal  = (+c.fixoDia||0)*d;
-  const pedShopee  = (+c.pedagioShopee||0)*d;
+  const fixoDia    = +(rota?.fixoDia)||0;
+  const pedDia     = +(rota?.pedagioShopee)||0;
+  const valPkt     = +c.valorPacote||0.5;
+  const fixoTotal  = fixoDia*d;
+  const pedShopee  = pedDia*d;
   const pedPago    = +pedagio||0;
   const valPkts    = Math.max(0,(+total||0)-fixoTotal-pedShopee);
-  const pkts       = (+c.valorPacote||0.5)>0?Math.round(valPkts/(+c.valorPacote||0.5)):0;
-  const sobraPed   = pedShopee - pedPago;
-  const custoMot   = ((+c.diaria||0)+(+c.valeRefeicaoDia||0))*d;
+  const pkts       = valPkt>0?Math.round(valPkts/valPkt):0;
+  const sobraPed   = pedShopee-pedPago;
+  const custoMot   = 0;
   const check      = Math.abs(fixoTotal+pedShopee+valPkts-(+total||0))<0.02;
-  return {fixoTotal,pedShopee,pedPago,valPkts,pkts,sobraPed,custoMot,check};
+  return {fixoTotal,pedShopee,pedPago,valPkts,pkts,sobraPed,custoMot,check,fixoDia,pedShopeeDia:pedDia};
 }
 
 // ═══════════ ALERTS ═══════════════════════════════════════════════
@@ -733,7 +737,8 @@ function renderCfg(){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
             <div class="row" style="padding:4px 0"><span class="rl">Fixo/dia</span><span class="rv c-gn">${R$(r.fixoDia||0)}</span></div>
             <div class="row" style="padding:4px 0"><span class="rl">Pedágio Shopee/dia</span><span class="rv c-gn">${R$(r.pedagioShopee||0)}</span></div>
-            <div class="row" style="padding:4px 0"><span class="rl">Motorista/dia</span><span class="rv c-bl">${R$(r.motDiaPadrao||0)}</span></div>
+            ${r.motNome?`<div class="row" style="padding:4px 0"><span class="rl">Motorista</span><span class="rv c-bl">👤 ${r.motNome}</span></div>`:''}
+          <div class="row" style="padding:4px 0"><span class="rl">Custo motorista</span><span class="rv c-bl">${r.motTipo==='fixo'?R$(r.motFixoMensal)+'/mês':R$(r.motDiaPadrao||0)+'/dia'}</span></div>
             <div class="row" style="padding:4px 0"><span class="rl">Valor/pacote</span><span class="rv">${R$(c.valorPacote||0.5)}</span></div>
             ${r.dataInicio?`<div class="row" style="padding:4px 0"><span class="rl">Início</span><span class="rv">${r.dataInicio}</span></div>`:''}
             ${r.dataFim?`<div class="row" style="padding:4px 0"><span class="rl">Fim</span><span class="rv">${r.dataFim}</span></div>`:''}
@@ -792,7 +797,14 @@ function addEquipeMembro(){
   const m={nome,funcao:document.getElementById('eq-funcao')?.value||'motorista',tipo};
   if(tipo==='diaria') m.diaria=+document.getElementById('eq-diaria')?.value||0;
   else { m.fixoMensal=+document.getElementById('eq-fixo-val')?.value||0; m.sabInclusos=+document.getElementById('eq-sab-inc')?.value||2; m.sabExtra=+document.getElementById('eq-sab-extra')?.value||0; m.pag1Dia=+document.getElementById('eq-pag1-dia')?.value||5; m.pag1Val=+document.getElementById('eq-pag1-val')?.value||0; m.pag2Dia=+document.getElementById('eq-pag2-dia')?.value||20; m.pag2Val=+document.getElementById('eq-pag2-val')?.value||0; }
-  const ri=_modalRotaIdx; if(ri===null||!DB.cfg.rotas[ri]) return;
+  // Find rota by name if index is unreliable
+  let ri=_modalRotaIdx;
+  if(ri===null||ri===undefined||!DB.cfg.rotas[ri]){
+    // Try to find by name from modal
+    const nomeEl=document.getElementById('rt-nome');
+    if(nomeEl) ri=(DB.cfg.rotas||[]).findIndex(r=>r.nome===nomeEl.value);
+  }
+  if(ri<0||ri===null||!DB.cfg.rotas[ri]){ showToast('❌ Salve a rota primeiro!'); return; }
   if(!DB.cfg.rotas[ri].equipe) DB.cfg.rotas[ri].equipe=[];
   DB.cfg.rotas[ri].equipe.push(m); save();
   document.getElementById('eq-nome').value=''; document.getElementById('eq-diaria').value='';
@@ -800,7 +812,12 @@ function addEquipeMembro(){
   showToast('✅ '+m.nome+' adicionado!');
 }
 function remEquipeMembro(i){
-  const ri=_modalRotaIdx; if(ri===null) return;
+  let ri=_modalRotaIdx;
+  if(ri===null||ri===undefined||!DB.cfg.rotas[ri]){
+    const nomeEl=document.getElementById('rt-nome');
+    if(nomeEl) ri=(DB.cfg.rotas||[]).findIndex(r=>r.nome===nomeEl.value);
+  }
+  if(ri<0||!DB.cfg.rotas[ri]) return;
   if(!confirm('Remover este membro?')) return;
   DB.cfg.rotas[ri].equipe.splice(i,1); save();
   document.getElementById('equipe-list-modal').innerHTML=DB.cfg.rotas[ri].equipe.map((m,i2)=>`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">${m.funcao==='motorista'?'🚗':m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</div></div><button class="del" onclick="remEquipeMembro(${i2})">🗑</button></div>`).join('');
@@ -834,7 +851,7 @@ function refreshExtras(){ const el=document.getElementById('extras-list'); if(!e
 
 // ═══════════ MODAL SEMANA ═════════════════════════════════════════
 let selDias=5;
-window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
+window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
 window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 
 function modalSem(s){
@@ -934,11 +951,16 @@ function modalSem(s){
               <div style="font-size:11px;color:var(--t2)">${m.tipo==='fixo_mensal'?'Fixo R$'+m.fixoMensal+'/mês':'R$'+m.diaria+'/dia'}</div>
             </div>
             ${m.tipo==='diaria'?`
-              <div style="display:flex;align-items:center;gap:4px">
-                <input type="number" id="eq-dias-${i}" value="${selDias}" min="0" max="6"
-                  style="width:44px;padding:6px;border-radius:6px;border:1.5px solid var(--bd);background:var(--s2);color:var(--tx);text-align:center;font-size:13px;font-weight:700">
-                <span style="font-size:11px;color:var(--t2)">dias</span>
-              </div>` : `<span style="font-size:11px;color:var(--bl);font-weight:600">pro-rata</span>`}
+              <div style="width:100%;margin-top:8px">
+                <div style="font-size:10px;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Dias que trabalhou:</div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  ${['Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,di)=>`
+                    <button type="button" id="eq-dia-${i}-${di}" onclick="togEqDia(${i},${di})"
+                      style="padding:5px 8px;border-radius:6px;border:1.5px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:11px;font-weight:600;transition:.15s">${d}</button>
+                  `).join('')}
+                </div>
+                <div id="eq-resumo-${i}" style="font-size:11px;color:var(--yw);margin-top:5px"></div>
+              </div>` : `<span style="font-size:11px;color:var(--bl);font-weight:600;margin-top:4px;display:block">Fixo — pro-rata mensal</span>`}
           </div>`).join('')}
         <div style="font-size:11px;color:var(--t2);margin-top:8px;text-align:center">
           ✏️ Desmarque quem não trabalhou nesta semana
@@ -1044,9 +1066,9 @@ function saveSem(){
         const isExtra=teveSabado&&sabsAnt>=(+m.sabInclusos||2);
         custoMotReal+=(+m.fixoMensal||0)/4.3+(isExtra?+m.sabExtra||0:0);
       } else {
-        const diasEl=document.getElementById('eq-dias-'+i);
-        const d2=diasEl?+diasEl.value||selDias:selDias;
-        custoMotReal+=(+m.diaria||0)*d2;
+        const diasMem=_equipesDias[i]||[];
+        const nDias=diasMem.length>0?diasMem.length:selDias;
+        custoMotReal+=(+m.diaria||0)*nDias;
       }
     });
   } else if(rota?.motTipo==='fixo'){
@@ -1064,7 +1086,14 @@ function saveSem(){
   // Captura quais dias foram selecionados em ordem
   const diasSel=[];
   document.querySelectorAll('.day-btn').forEach((b,i)=>{if(b.classList.contains('on'))diasSel.push(i);});
-  DB.semanas.push({id:uid(),data,total:tot+ganhoExtra,totalShopee:tot,ganhoExtra,dias:selDias,diasSelecionados:diasSel,pedDia,rotaId,teveSabado,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotReal_final||custoMotReal,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:0});
+  const eqLog=(rota?.equipe||[]).map((m,idx2)=>{
+    const atv=document.getElementById('eq-ativo-'+idx2);
+    if(atv&&!atv.checked) return null;
+    const dm=_equipesDias[idx2]||[];
+    return {nome:m.nome,funcao:m.funcao,diasSel:dm,nDias:dm.length>0?dm.length:selDias};
+  }).filter(Boolean);
+  _equipesDias={};
+  DB.semanas.push({id:uid(),data,total:tot+ganhoExtra,totalShopee:tot,ganhoExtra,dias:selDias,diasSelecionados:diasSel,pedDia,rotaId,teveSabado,equipeLog:eqLog,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotReal_final||custoMotReal,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:0});
   _teveSabado=false;
   save(); closeModal(); render();
 }
@@ -1820,7 +1849,8 @@ function modalRota(idx){
   const isEdit = r !== null && r !== undefined;
   return `
     <div class="mh"><span class="mt">${isEdit?'Editar Rota':'Nova Rota'}</span><button class="mc" onclick="closeModal()">×</button></div>
-    <div class="fld"><label class="lbl">Nome da rota</label><input class="inp" id="rt-nome" placeholder="Ex: Rota Nova, Rota Centro" value="${r?.nome||''}"></div>
+    <div class="fld"><label class="lbl">Nome da rota</label><input class="inp" id="rt-nome" placeholder="Ex: Atibaia, Centro" value="${r?.nome||''}"></div>
+    <div class="fld"><label class="lbl">👤 Motorista principal (nome)</label><input class="inp" id="rt-mot-nome" placeholder="Ex: João Silva" value="${r?.motNome||''}"></div>
     <div class="fld"><label class="lbl">Ícone (emoji)</label><input class="inp" id="rt-icon" placeholder="Ex: 🗺️ 🚛 📦" value="${r?.icone||'🗺️'}" style="font-size:20px;width:100px"></div>
     <div class="fld"><label class="lbl">Data de início desta rota</label><input class="inp" type="date" id="rt-inicio" value="${r?.dataInicio||''}"><div style="font-size:11px;color:var(--t2);margin-top:4px">Lançamentos a partir desta data serão desta rota</div></div>
     <div class="fld"><label class="lbl">Data de fim (deixe vazio se ainda ativa)</label><input class="inp" type="date" id="rt-fim" value="${r?.dataFim||''}"></div>
@@ -1914,6 +1944,7 @@ window.saveRota = function(idx){
     nome, icone: document.getElementById('rt-icon')?.value||'🗺️',
     dataInicio: document.getElementById('rt-inicio')?.value||'',
     dataFim:    document.getElementById('rt-fim')?.value||'',
+    motNome:       document.getElementById('rt-mot-nome')?.value||'',
     fixoDia:       +document.getElementById('rt-fixo')?.value||0,
     pedagioShopee: +document.getElementById('rt-ped')?.value||0,
     motTipo:       document.getElementById('rt-mot-tipo')?.value||'diaria',
