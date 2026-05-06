@@ -864,7 +864,9 @@ window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 function modalSem(s){
   const c=DB.cfg, dias=['Seg','Ter','Qua','Qui','Sex','Sáb'], isEdit=!!s;
   if(s) selDias=s.dias||5;
-  const pedDia=s?(s.pedDia||(s.dias>0?Math.round(s.pedPago/s.dias):0)):(c.pedagioDia||0);
+  // pedDia: usa valor salvo no lançamento ou pedagioDia da rota selecionada
+  const _rotaM=(DB.cfg.rotas||[]).find(r=>r.nome===(s?.rotaId||(DB.cfg.rotas||[]).find(x=>!x.dataFim)?.nome));
+  const pedDia=s?(+s.pedDia||0):(+_rotaM?.pedagioDia||0);
   return `
     <div class="mh"><span class="mt">${isEdit?'Editar Semana':'Lançar Semana'}</span><button class="mc" onclick="closeModal()">×</button></div>
     <div class="fld"><label class="lbl">Data de fechamento da semana</label><input class="inp" type="date" id="ms-data" value="${s?s.data:today()}"></div>
@@ -953,6 +955,28 @@ function getRotaSelecionada(){
   const rotas = DB.cfg.rotas||[];
   return rotas.find(r=>r.nome===sel) || null;
 }
+window.togEqDia=function(memIdx,diaIdx){
+  if(!_equipesDias[memIdx]) _equipesDias[memIdx]=[];
+  const arr=_equipesDias[memIdx];
+  const pos=arr.indexOf(diaIdx);
+  if(pos>=0) arr.splice(pos,1); else arr.push(diaIdx);
+  arr.sort((a,b)=>a-b);
+  // Update button style
+  const btn=document.getElementById('eq-dia-'+memIdx+'-'+diaIdx);
+  if(btn){
+    const on=arr.includes(diaIdx);
+    btn.style.borderColor=on?'var(--ac)':'var(--bd)';
+    btn.style.background=on?'rgba(240,90,40,.15)':'var(--s2)';
+    btn.style.color=on?'var(--ac)':'var(--t2)';
+  }
+  // Update resumo text
+  const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const res=document.getElementById('eq-resumo-'+memIdx);
+  if(res) res.textContent=arr.length>0?arr.length+' dia(s): '+arr.map(d=>nomes[d]).join(', '):'Nenhum dia selecionado';
+  // Update custo preview
+  prevSem();
+};
+
 window.refreshEquipeModal=function(rotaNome){
   const rt=(DB.cfg.rotas||[]).find(r=>r.nome===rotaNome);
   const eq=rt?.equipe||[];
