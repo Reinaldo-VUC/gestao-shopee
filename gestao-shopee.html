@@ -1046,8 +1046,26 @@ function prevSem(){
   document.getElementById('pv-vpkt').textContent=R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent=cx.pkts.toLocaleString('pt-BR')+' pacotes';
   document.getElementById('pv-sob').textContent=R$(cx.sobraPed);
-  // sob already set
-  document.getElementById('pv-mot').textContent=R$(cx.custoMot);
+  // Calculate custoMot preview based on rota type
+  let custoMotPreview=0;
+  const rotaPrev=getRotaSelecionada();
+  const equipePrev=rotaPrev?.equipe||[];
+  if(equipePrev.length>0){
+    equipePrev.forEach((m,i)=>{
+      const el=document.getElementById('eq-ativo-'+i);
+      if(el&&!el.checked) return;
+      if(m.tipo==='fixo_mensal'){ custoMotPreview+=(+m.fixoMensal||0)/4.3; }
+      else {
+        const diasMem=_equipesDias[i]||[];
+        custoMotPreview+=(+m.diaria||0)*(diasMem.length>0?diasMem.length:selDias);
+      }
+    });
+  } else if(rotaPrev?.motTipo==='fixo'){
+    custoMotPreview=(+rotaPrev.motFixoMensal||0)/4.3;
+  } else {
+    custoMotPreview=(+rotaPrev?.motDiaPadrao||0)*selDias;
+  }
+  document.getElementById('pv-mot').textContent=R$(custoMotPreview);
   const chk=document.getElementById('pv-chk');
   chk.textContent=cx.check?'✔ Conta fechando corretamente':'⚠ Verifique: a soma não fecha com o total';
   chk.style.cssText=`margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:${cx.check?'rgba(52,211,153,.1)':'rgba(244,63,94,.1)'};color:${cx.check?'var(--gn)':'var(--rd)'}`;
