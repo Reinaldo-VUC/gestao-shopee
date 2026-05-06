@@ -851,7 +851,14 @@ function refreshExtras(){ const el=document.getElementById('extras-list'); if(!e
 
 // ═══════════ MODAL SEMANA ═════════════════════════════════════════
 let selDias=5;
-window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem'){ mi.innerHTML=modalSem(); setTimeout(()=>refreshEquipeModal((DB.cfg.rotas||[])[0]?.nome||''),50); } if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
+window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem'){
+  mi.innerHTML=modalSem();
+  (function tryEq(n){ 
+    const el=document.getElementById('ms-equipe-container');
+    if(el){ const ra=(DB.cfg.rotas||[]).find(r=>!r.dataFim); refreshEquipeModal(ra?.nome||''); }
+    else if(n>0) setTimeout(()=>tryEq(n-1),80);
+  })(8);
+} if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
 window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 
 function modalSem(s){
@@ -899,7 +906,7 @@ function modalSem(s){
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
           <div class="crow"><span>📦 Pacotes coletados</span><span id="pv-pkts" class="fw8 c-ac" style="font-size:16px"></span></div>
-          <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob" class="fw8 c-yw"></span></div>
+          <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob2" class="fw8 c-yw"></span></div>
           <div class="crow"><span>👤 Custo motorista</span><span id="pv-mot" class="fw8 c-bl"></span></div>
         </div>
         <div id="pv-chk" style="margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px"></div>
@@ -1046,6 +1053,7 @@ function prevSem(){
   document.getElementById('pv-vpkt').textContent=R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent=cx.pkts.toLocaleString('pt-BR')+' pacotes';
   document.getElementById('pv-sob').textContent=R$(cx.sobraPed);
+  const _sob2=document.getElementById('pv-sob2'); if(_sob2) _sob2.textContent=R$(cx.sobraPed);
   // Calculate custoMot preview based on rota type
   let custoMotPreview=0;
   const rotaPrev=getRotaSelecionada();
@@ -1134,7 +1142,7 @@ window.editSem=id=>{
   }
   document.getElementById('mi').innerHTML=modalSem(s);
   document.getElementById('ov').classList.add('open');
-  setTimeout(()=>{ prevSem(); refreshEquipeModal(s.rotaId||(DB.cfg.rotas||[])[0]?.nome||''); },50);
+  setTimeout(()=>{ prevSem(); const ra2=(DB.cfg.rotas||[]).find(r=>r.nome===s.rotaId)||((DB.cfg.rotas||[]).find(r=>!r.dataFim)); refreshEquipeModal(ra2?.nome||''); },80);
 };
 window.updateSem=id=>{
   const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
