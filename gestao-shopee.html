@@ -890,7 +890,15 @@ function modalSem(s){
         return `<button class="day-btn${on?' on':''}" id="day-${i}" onclick="togDay(${i})">${d}</button>`;
       }).join('')}</div>
       <div style="font-size:12px;color:var(--t2);margin-top:8px;text-align:center">
-        <span id="dias-count" class="fw8 c-ac">${selDias} dias</span> trabalhados · Fixo <span id="dias-fixo" class="c-gn fw8">${R$((c.fixoDia||0)*selDias)}</span> · Motorista <span id="dias-mot" class="c-bl fw8">${R$(((c.diaria||0)+(c.valeRefeicaoDia||0))*selDias)}</span>
+        <span id="dias-count" class="fw8 c-ac">${selDias} dias</span> trabalhados · Fixo <span id="dias-fixo" class="c-gn fw8">${R$((c.fixoDia||0)*selDias)}</span> · Motorista <span id="dias-mot" class="c-bl fw8">${(()=>{
+        const _rm=(DB.cfg.rotas||[]).find(r=>r.nome===(s?.rotaId||(DB.cfg.rotas||[]).find(x=>!x.dataFim)?.nome));
+        const _eq=_rm?.equipe||[];
+        let _tot=0;
+        if(_eq.length>0){ _eq.forEach(m=>{ if(m.tipo==='fixo_mensal') _tot+=(+m.fixoMensal||0)/4.3; else _tot+=(+m.diaria||0)*selDias; }); }
+        else if(_rm?.motTipo==='fixo') _tot=(+_rm.motFixoMensal||0)/4.3;
+        else _tot=(+_rm?.motDiaPadrao||0)*selDias;
+        return R$(_tot);
+      })()}</span>
       </div>
     </div>
     <div class="fld"><label class="lbl">Pedágio gasto por dia (R$)</label><input class="inp" type="number" id="ms-ped-dia" value="${pedDia}" oninput="prevSem()"><div style="font-size:11px;color:var(--t2);margin-top:5px">Total = valor/dia × dias trabalhados ✓</div></div>
@@ -909,7 +917,9 @@ function modalSem(s){
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
           <div class="crow"><span>📦 Pacotes coletados</span><span id="pv-pkts" class="fw8 c-ac" style="font-size:16px"></span></div>
           <div class="crow"><span>💛 Sobra de pedágio</span><span id="pv-sob2" class="fw8 c-yw"></span></div>
-          <div class="crow"><span>👤 Custo motorista</span><span id="pv-mot" class="fw8 c-bl"></span></div>
+          <div id="pv-mot-detalhe">
+            <div class="crow"><span>👤 Custo equipe</span><span id="pv-mot" class="fw8 c-bl"></span></div>
+          </div>
         </div>
         <div id="pv-chk" style="margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px"></div>
       </div>
@@ -1108,7 +1118,37 @@ function prevSem(){
       if(m.tipo==='fixo_mensal') custoMotPreview+=(+m.fixoMensal||0)/4.3;
     });
   }
-  document.getElementById('pv-mot').textContent=R$(custoMotPreview);
+  // Show detailed breakdown per member
+  const pvMotDetalhe=document.getElementById('pv-mot-detalhe');
+  if(pvMotDetalhe && equipePrev.length>0){
+    const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+    let detalheHtml='';
+    let totalEq=0;
+    equipePrev.forEach((m,i)=>{
+      const el=document.getElementById('eq-ativo-'+i);
+      if(el&&!el.checked) return;
+      let custo=0;
+      if(m.tipo==='fixo_mensal'){
+        custo=(+m.fixoMensal||0)/4.3;
+        detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (fixo)</span><span class="fw8 c-bl" style="font-size:12px">${R$(custo)}</span></div>`;
+      } else {
+        const diasMem=_equipesDias[i]||[];
+        const nDias=diasMem.length>0?diasMem.length:selDias;
+        custo=(+m.diaria||0)*nDias;
+        const diasNomes=diasMem.length>0?diasMem.map(d=>nomes[d]).join(','):'todos';
+        detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (${nDias}d: ${diasNomes})</span><span class="fw8 c-bl" style="font-size:12px">${R$(custo)}</span></div>`;
+      }
+      totalEq+=custo;
+    });
+    // If still 0 (checkboxes not in DOM yet), use full equipe
+    if(totalEq===0){
+      equipePrev.forEach(m=>{ if(m.tipo==='fixo_mensal') totalEq+=(+m.fixoMensal||0)/4.3; });
+    }
+    pvMotDetalhe.innerHTML=`<div class="crow"><span style="font-weight:700">👥 Custo equipe</span><span id="pv-mot" class="fw8 c-bl">${R$(totalEq)}</span></div>${detalheHtml}`;
+    custoMotPreview=totalEq;
+  } else {
+    document.getElementById('pv-mot').textContent=R$(custoMotPreview);
+  }
   const chk=document.getElementById('pv-chk');
   chk.textContent=cx.check?'✔ Conta fechando corretamente':'⚠ Verifique: a soma não fecha com o total';
   chk.style.cssText=`margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:${cx.check?'rgba(52,211,153,.1)':'rgba(244,63,94,.1)'};color:${cx.check?'var(--gn)':'var(--rd)'}`;
