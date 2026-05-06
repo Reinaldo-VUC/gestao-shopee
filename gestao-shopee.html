@@ -851,7 +851,7 @@ function refreshExtras(){ const el=document.getElementById('extras-list'); if(!e
 
 // ═══════════ MODAL SEMANA ═════════════════════════════════════════
 let selDias=5;
-window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem') mi.innerHTML=modalSem(); if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
+window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem'){ mi.innerHTML=modalSem(); setTimeout(()=>refreshEquipeModal((DB.cfg.rotas||[])[0]?.nome||''),50); } if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
 window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 
 function modalSem(s){
@@ -864,8 +864,8 @@ function modalSem(s){
     ${(DB.cfg.rotas||[]).length>0?`
     <div class="fld">
       <label class="lbl">Rota desta semana</label>
-      <select class="inp" id="ms-rota" onchange="onRotaSemChange()">
-        ${(DB.cfg.rotas||[]).map(r=>`<option value="${r.nome}" ${(s?.rotaId||DB.cfg.rotas[0]?.nome)===r.nome?'selected':''}>${r.icone||'🗺️'} ${r.nome}</option>`).join('')}
+      <select class="inp" id="ms-rota" onchange="onRotaSemChange();refreshEquipeModal(this.value)">
+        ${(DB.cfg.rotas||[]).filter(r=>!r.dataFim).map(r=>`<option value="${r.nome}" ${(s?.rotaId||(DB.cfg.rotas||[]).find(x=>!x.dataFim)?.nome)===r.nome?'selected':''}>${r.icone||'🗺️'} ${r.nome}</option>`).join('')}
       </select>
     </div>`:''}
     <div class="fld">
@@ -926,54 +926,7 @@ function modalSem(s){
       }
       return '';
     })()}
-    ${(()=>{
-      const rtSel=document.getElementById('ms-rota')?.value||(DB.cfg.rotas||[])[0]?.nome;
-      const rt=(DB.cfg.rotas||[]).find(r=>r.nome===rtSel)||null;
-      const eq=rt?.equipe||[];
-      if(!eq.length) return '';
-      const maCur=mAStr(document.getElementById('ms-data')?.value||today());
-      const sabsNoMes=DB.semanas.filter(x=>mAStr(x.data)===maCur&&x.rotaId===rt.nome&&x.teveSabado).length;
-      const inc=+(rt?.motSabInclusos||2);
-      const sabExtrasCount=Math.max(0,sabsNoMes-inc);
-      return `<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">
-          👥 Equipe desta semana
-        </div>
-        <div style="font-size:11px;color:var(--yw);margin-bottom:10px;padding:6px 8px;background:rgba(251,191,36,.08);border-radius:6px">
-          📅 Sábados no mês: <b>${sabsNoMes}</b> de <b>${inc}</b> inclusos no fixo
-          ${sabExtrasCount>0?'— <b style=color:var(--rd)>'+sabExtrasCount+' sábado(s) EXTRA</b>':''}
-        </div>
-        ${eq.map((m,i)=>`
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
-            <input type="checkbox" id="eq-ativo-${i}" checked style="width:16px;height:16px;accent-color:var(--ac);flex-shrink:0">
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:600">${m.funcao==='motorista'?'🚗':m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</div>
-              <div style="font-size:11px;color:var(--t2)">${m.tipo==='fixo_mensal'?'Fixo R$'+m.fixoMensal+'/mês':'R$'+m.diaria+'/dia'}</div>
-            </div>
-            ${m.tipo==='diaria'?`
-              <div style="width:100%;margin-top:8px">
-                <div style="font-size:10px;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Dias que trabalhou:</div>
-                <div style="display:flex;gap:4px;flex-wrap:wrap">
-                  ${['Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,di)=>`
-                    <button type="button" id="eq-dia-${i}-${di}" onclick="togEqDia(${i},${di})"
-                      style="padding:5px 8px;border-radius:6px;border:1.5px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:11px;font-weight:600;transition:.15s">${d}</button>
-                  `).join('')}
-                </div>
-                <div id="eq-resumo-${i}" style="font-size:11px;color:var(--yw);margin-top:5px"></div>
-              </div>` : `<span style="font-size:11px;color:var(--bl);font-weight:600;margin-top:4px;display:block">Fixo — pro-rata mensal</span>`}
-          </div>`).join('')}
-        <div style="font-size:11px;color:var(--t2);margin-top:8px;text-align:center">
-          ✏️ Desmarque quem não trabalhou nesta semana
-        </div>
-      </div>`;
-    })()}
-    ${(()=>{
-      const rt=getRotaSelecionada();
-      const gn=rt?.ganhos||[];
-      if(!gn.length) return '';
-      const gnHtml=gn.map((g,i)=>'<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer"><input type="checkbox" id="ganho-ativo-'+i+'" style="width:16px;height:16px;accent-color:var(--gn)"><span style="font-size:13px">'+g.nome+'</span><span style="font-size:12px;color:var(--gn);font-weight:700">+'+R$(g.valor)+'</span></label>').join('');
-      return '<div class="fld" style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:12px"><div class="lbl" style="margin-bottom:8px">💰 Ganhos Adicionais</div>'+gnHtml+'</div>';
-    })()}
+    <div id="ms-equipe-container"></div>
     <div class="fld"><label class="lbl">Observações</label><input class="inp" id="ms-obs" value="${s?s.obs||'':''}"
 " placeholder="Opcional"></div>
     ${isEdit?`<button class="btn" onclick="updateSem('${s.id}')">💾 Salvar alterações</button>`:`<button class="btn" onclick="saveSem()">✅ Salvar semana</button>`}`;
@@ -993,6 +946,61 @@ function getRotaSelecionada(){
   const rotas = DB.cfg.rotas||[];
   return rotas.find(r=>r.nome===sel) || null;
 }
+window.refreshEquipeModal=function(rotaNome){
+  const rt=(DB.cfg.rotas||[]).find(r=>r.nome===rotaNome);
+  const eq=rt?.equipe||[];
+  const gn=rt?.ganhos||[];
+  const maCur=mAStr(document.getElementById('ms-data')?.value||today());
+  const sabsNoMes=DB.semanas.filter(x=>mAStr(x.data)===maCur&&x.rotaId===rotaNome&&x.teveSabado).length;
+  const inc=+(rt?.motSabInclusos||2);
+  const sabExtrasCount=Math.max(0,sabsNoMes-inc);
+  const dias=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  // Update equipe section
+  let eqHtml='';
+  if(eq.length>0){
+    eqHtml=`<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👥 Equipe desta semana</div>
+      <div style="font-size:11px;color:var(--yw);margin-bottom:10px;padding:6px 8px;background:rgba(251,191,36,.08);border-radius:6px">
+        📅 Sábados no mês: <b>${sabsNoMes}</b> de <b>${inc}</b> inclusos${sabExtrasCount>0?` — <b style="color:var(--rd)">${sabExtrasCount} extra(s)</b>`:''}
+      </div>
+      ${eq.map((m,i)=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--bd)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:${m.tipo==='diaria'?'8':'0'}px">
+            <input type="checkbox" id="eq-ativo-${i}" checked style="width:16px;height:16px;accent-color:var(--ac);flex-shrink:0">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${m.funcao==='motorista'?'🚗':m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</div>
+              <div style="font-size:11px;color:var(--t2)">${m.tipo==='fixo_mensal'?'Fixo R$'+m.fixoMensal+'/mês':'R$'+m.diaria+'/dia'}</div>
+            </div>
+            ${m.tipo==='fixo_mensal'?'<span style="font-size:11px;color:var(--bl);font-weight:600">pro-rata</span>':''}
+          </div>
+          ${m.tipo==='diaria'?`
+            <div style="margin-left:26px">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Dias trabalhados:</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${dias.map((d,di)=>`<button type="button" id="eq-dia-${i}-${di}" onclick="togEqDia(${i},${di})"
+                  style="padding:5px 8px;border-radius:6px;border:1.5px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:11px;font-weight:600">${d}</button>`).join('')}
+              </div>
+              <div id="eq-resumo-${i}" style="font-size:11px;color:var(--yw);margin-top:5px">Nenhum dia selecionado</div>
+            </div>`:''
+          }
+        </div>`).join('')}
+      <div style="font-size:11px;color:var(--t2);margin-top:8px;text-align:center">✏️ Desmarque quem não trabalhou nesta semana</div>
+    </div>`;
+  }
+
+  // Update ganhos section
+  let gnHtml='';
+  if(gn.length>0){
+    const gnHtmlItems=gn.map((g,i)=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer"><input type="checkbox" id="ganho-ativo-${i}" style="width:16px;height:16px;accent-color:var(--gn)"><span style="font-size:13px">${g.nome}</span><span style="font-size:12px;color:var(--gn);font-weight:700">+${R$(g.valor)}</span></label>`).join('');
+    gnHtml=`<div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:12px;margin-bottom:8px"><div class="lbl" style="margin-bottom:8px">💰 Ganhos Adicionais</div>${gnHtmlItems}</div>`;
+  }
+
+  // Update the equipe container in modal
+  const eqContainer=document.getElementById('ms-equipe-container');
+  if(eqContainer) eqContainer.innerHTML=eqHtml+gnHtml;
+};
+
 function onRotaSemChange(){
   const rota = getRotaSelecionada();
   if(rota){
@@ -1108,7 +1116,7 @@ window.editSem=id=>{
   }
   document.getElementById('mi').innerHTML=modalSem(s);
   document.getElementById('ov').classList.add('open');
-  setTimeout(prevSem,50);
+  setTimeout(()=>{ prevSem(); refreshEquipeModal(s.rotaId||(DB.cfg.rotas||[])[0]?.nome||''); },50);
 };
 window.updateSem=id=>{
   const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
@@ -2450,20 +2458,90 @@ function renderFin(){
     ${(()=>{
       const enc=rotas.filter(r=>r.dataFim);
       if(!enc.length) return '';
-      return `<div class="card" style="border-left:3px solid var(--t2)">
-        <div class="ct" style="color:var(--t2)">📂 Histórico — Rotas Encerradas</div>
-        ${enc.map(r=>{
-          const todos=DB.semanas.filter(s=>s.rotaId===r.nome);
-          const recT=todos.reduce((a,s)=>a+(+s.total||0),0);
-          const pktsT=todos.reduce((a,s)=>a+(+s.pkts||0),0);
-          const diasT=todos.reduce((a,s)=>a+(+s.dias||0),0);
-          return `<div class="item"><div style="flex:1">
-            <div class="itx">${r.icone||'🗺️'} ${r.nome}</div>
-            <div class="isb">${r.dataInicio||'—'} até ${r.dataFim||'—'} · ${todos.length} semanas · ${diasT} dias<br>
-            Receita total: <b class="c-gn">${R$(recT)}</b> · ${pktsT.toLocaleString('pt-BR')} pacotes</div>
-          </div></div>`;
-        }).join('')}
-      </div>`;
+      return enc.map(r=>{
+        const todos=DB.semanas.filter(s=>s.rotaId===r.nome);
+        if(!todos.length) return '';
+        const recT   = todos.reduce((a,s)=>a+(+s.total||0),0);
+        const pktsT  = todos.reduce((a,s)=>a+(+s.pkts||0),0);
+        const diasT  = todos.reduce((a,s)=>a+(+s.dias||0),0);
+        const motT   = todos.reduce((a,s)=>a+(+s.custoMot||0),0);
+        const pedT   = todos.reduce((a,s)=>a+(+s.pedPago||0),0);
+        const semanas= todos.length;
+        // Variáveis lançadas no período
+        const varsPeriodo = DB.variaveis.filter(v=>{
+          if(!r.dataInicio||!r.dataFim) return false;
+          return v.data>=r.dataInicio && v.data<=r.dataFim;
+        });
+        const varT = varsPeriodo.reduce((a,v)=>a+(+v.valor||0),0);
+        // Fixas proporcionais pelo período
+        const pts=r.dataInicio?r.dataInicio.split('-'):[];
+        const ptf=r.dataFim?r.dataFim.split('-'):[];
+        const dInicio=r.dataInicio?new Date(r.dataInicio+'T12:00:00'):null;
+        const dFim=r.dataFim?new Date(r.dataFim+'T12:00:00'):null;
+        const diasCorridos=dInicio&&dFim?Math.round((dFim-dInicio)/86400000)+1:0;
+        const mesesOp=diasCorridos/30;
+        const fixaMensal=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
+        const fixasT=fixaMensal*mesesOp;
+        const despT=motT+pedT+varT+fixasT;
+        const lucroT=recT-despT;
+        const margem=recT>0?(lucroT/recT)*100:0;
+        const recMedia=semanas>0?recT/semanas:0;
+        const lucMedia=semanas>0?lucroT/semanas:0;
+        return `<div class="card" style="border-left:3px solid var(--t2);margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div>
+              <div class="fw8 ff" style="font-size:16px">${r.icone||'🗺️'} ${r.nome} <span style="font-size:11px;background:var(--bd);padding:3px 8px;border-radius:99px;font-weight:600;color:var(--t2)">ENCERRADA</span></div>
+              <div style="font-size:12px;color:var(--t2);margin-top:3px">${r.dataInicio||'—'} até ${r.dataFim||'—'} · ${semanas} semanas · ${diasT} dias trabalhados</div>
+            </div>
+            <div style="text-align:right">
+              <div class="fw8" style="font-size:18px;color:${lucroT>=0?'var(--gn)':'var(--rd)'}">${R$(lucroT)}</div>
+              <div style="font-size:11px;color:var(--t2)">lucro total · margem ${margem.toFixed(1)}%</div>
+            </div>
+          </div>
+
+          <!-- KPIs resumo -->
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+            <div style="background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.15);border-radius:10px;padding:10px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:3px">Receita total</div>
+              <div class="fw8 c-gn" style="font-size:16px">${R$(recT)}</div>
+              <div style="font-size:10px;color:var(--t2)">${R$(recMedia)}/sem média</div>
+            </div>
+            <div style="background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.15);border-radius:10px;padding:10px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:3px">Despesas total</div>
+              <div class="fw8 c-rd" style="font-size:16px">${R$(despT)}</div>
+              <div style="font-size:10px;color:var(--t2)">aprox. ${diasCorridos} dias corridos</div>
+            </div>
+            <div style="background:${lucroT>=0?'rgba(52,211,153,.07)':'rgba(244,63,94,.07)'};border:1px solid ${lucroT>=0?'rgba(52,211,153,.15)':'rgba(244,63,94,.15)'};border-radius:10px;padding:10px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:3px">Lucro total</div>
+              <div class="fw8" style="font-size:16px;color:${lucroT>=0?'var(--gn)':'var(--rd)'}">${R$(lucroT)}</div>
+              <div style="font-size:10px;color:var(--t2)">${R$(lucMedia)}/sem média</div>
+            </div>
+            <div style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.15);border-radius:10px;padding:10px;text-align:center">
+              <div style="font-size:10px;color:var(--t2);margin-bottom:3px">Pacotes</div>
+              <div class="fw8 c-ac" style="font-size:16px">${pktsT.toLocaleString('pt-BR')}</div>
+              <div style="font-size:10px;color:var(--t2)">${diasT} dias trabalhados</div>
+            </div>
+          </div>
+
+          <!-- Breakdown despesas -->
+          <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Composição das despesas</div>
+          <div class="row"><span class="rl">👥 Custo motorista/equipe</span><span class="rv c-bl">${R$(motT)}</span></div>
+          <div class="row"><span class="rl">🛣️ Pedágio gasto</span><span class="rv c-rd">${R$(pedT)}</span></div>
+          ${varT>0?`<div class="row"><span class="rl">📌 Despesas variáveis (período)</span><span class="rv c-rd">${R$(varT)}</span></div>`:''}
+          <div class="row"><span class="rl">📋 Fixas proporcionais (~${mesesOp.toFixed(1)} meses)</span><span class="rv c-rd">${R$(fixasT)}</span></div>
+
+          <!-- Semanas -->
+          <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 8px">Lançamentos semanais</div>
+          ${[...todos].sort((a,b)=>a.data>b.data?1:-1).map((s,i)=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">
+              <div>
+                <span style="color:var(--t2)">Sem ${i+1} · ${s.data} · ${s.dias}d</span>
+                <span style="color:var(--t2);margin-left:8px">📦 ${(+s.pkts||0).toLocaleString('pt-BR')} pkts</span>
+              </div>
+              <span class="fw8 c-gn">${R$(s.total)}</span>
+            </div>`).join('')}
+        </div>`;
+      }).join('');
     })()}
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
