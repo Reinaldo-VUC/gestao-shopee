@@ -2483,12 +2483,16 @@ function renderFin(){
     <!-- Receitas detalhadas -->
     <div class="card">
       <div class="ct">💰 Receitas Detalhadas — ${mALbl(finMes)}</div>
-      <div class="row"><span class="rl">🏁 Fixo de saída</span><span class="rv c-gn">${R$(f.recFixo)}</span></div>
-      <div class="row"><span class="rl">🛣️ Pedágio pago pela Shopee</span><span class="rv c-gn">${R$(f.recPedShop)}</span></div>
-      <div class="row"><span class="rl">📦 Receita de pacotes (${f.totPkts.toLocaleString('pt-BR')} un × R$0,50)</span><span class="rv c-gn">${R$(f.recPacotes)}</span></div>
-      ${f.recSobPed>0?`<div class="row"><span class="rl">💛 Sobra de pedágio (bônus)</span><span class="rv c-gn">${R$(f.recSobPed)}</span></div>`:''}
+      <div class="row"><span class="rl">🏁 Fixo de saída (${f.totDias}d)</span><span class="rv c-gn">${R$(f.recFixo)}</span></div>
+      <div class="row"><span class="rl">🛣️ Pedágio pago pela Shopee (${f.totDias}d)</span><span class="rv c-gn">${R$(f.recPedShop)}</span></div>
+      <div class="row"><span class="rl">📦 Pacotes (${f.totPkts.toLocaleString('pt-BR')} un × R$0,50)</span><span class="rv c-gn">${R$(f.recPacotes)}</span></div>
+      ${f.recSobPed>0?`<div class="row" style="opacity:.65"><span class="rl" style="font-size:11px">💛 Sobra de pedágio <span style="color:var(--t2)">(já inclusa acima — bônus pois você gastou menos que o pago)</span></span><span class="rv" style="font-size:11px;color:var(--t2)">${R$(f.recSobPed)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;padding:10px 0;margin-top:4px;border-top:1px solid var(--bd)">
-        <span class="fw8">Total receitas</span><span class="fw8 c-gn" style="font-size:16px">${R$(f.recTotal)}</span>
+        <div>
+          <div class="fw8">Total receitas</div>
+          <div style="font-size:11px;color:var(--t2)">Fixo + Pedágio Shopee + Pacotes</div>
+        </div>
+        <span class="fw8 c-gn" style="font-size:16px">${R$(f.recTotal)}</span>
       </div>
     </div>
 
@@ -2499,17 +2503,35 @@ function renderFin(){
       <!-- Equipe -->
       <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">👥 Equipe</div>
       ${(()=>{
+        // Motorista principal da rota
         const equipeRows=[];
         f.rotas.forEach(rota=>{
+          // Motorista principal (motNome + motFixoMensal)
+          if(rota.motNome && rota.motTipo==='fixo' && rota.motFixoMensal){
+            const sabsN=f.sems.filter(s=>s.rotaId===rota.nome&&s.teveSabado).length;
+            const sabExt=Math.max(0,sabsN-(+rota.motSabInclusos||2));
+            const extVal=sabExt*(+rota.motSabExtra||0);
+            const total=f.sems.filter(s=>s.rotaId===rota.nome).length*(+rota.motFixoMensal/4.3)+extVal;
+            equipeRows.push(`<div class="row"><span class="rl">🚗 ${rota.motNome} (motorista fixo${sabExt>0?' +'+sabExt+' sáb extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$(total)}</span></div>`);
+          }
+          // Equipe adicional - soma pelos lançamentos
           (rota.equipe||[]).forEach(m=>{
-            const sabsN=DB.semanas.filter(s=>mAStr(s.data)===finMes&&s.rotaId===rota.nome&&s.teveSabado).length;
-            const sabExt=Math.max(0,sabsN-(+m.sabInclusos||2));
-            const extVal=sabExt*(+m.sabExtra||0);
             if(m.tipo==='fixo_mensal'){
-              equipeRows.push(`<div class="row"><span class="rl">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (fixo mensal${sabExt>0?' +'+sabExt+' sáb.extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$((+m.fixoMensal||0)+extVal)}</span></div>`);
+              const sabsN=f.sems.filter(s=>s.rotaId===rota.nome&&s.teveSabado).length;
+              const sabExt=Math.max(0,sabsN-(+m.sabInclusos||2));
+              const extVal=sabExt*(+m.sabExtra||0);
+              const total=f.sems.filter(s=>s.rotaId===rota.nome).length*(+m.fixoMensal/4.3)+extVal;
+              equipeRows.push(`<div class="row"><span class="rl">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (fixo${sabExt>0?' +'+sabExt+' sáb extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$(total)}</span></div>`);
             } else {
-              // Diária - estima pelos lançamentos
-              equipeRows.push(`<div class="row"><span class="rl">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (diária R$${m.diaria}) — ${rota.nome}</span><span class="rv c-bl">ver lançamentos</span></div>`);
+              // Diária: soma pelos equipeLog dos lançamentos
+              let totalDias=0, totalVal=0;
+              f.sems.filter(s=>s.rotaId===rota.nome).forEach(s=>{
+                const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);
+                if(log){ totalDias+=log.nDias||0; totalVal+=(+m.diaria||0)*(log.nDias||0); }
+              });
+              if(totalDias>0){
+                equipeRows.push(`<div class="row"><span class="rl">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (${totalDias}d × R$${m.diaria}) — ${rota.nome}</span><span class="rv c-bl">${R$(totalVal)}</span></div>`);
+              }
             }
           });
         });
@@ -2622,7 +2644,7 @@ function renderFin(){
     ${(()=>{
       const enc=rotas.filter(r=>r.dataFim);
       if(!enc.length) return '';
-      return enc.map(r=>{
+      const cards=enc.map(r=>{
         const todos=DB.semanas.filter(s=>s.rotaId===r.nome);
         if(!todos.length) return '';
         const recT   = todos.reduce((a,s)=>a+(+s.total||0),0);
@@ -2706,6 +2728,13 @@ function renderFin(){
             </div>`).join('')}
         </div>`;
       }).join('');
+      return '<div class="card" style="border-left:3px solid var(--t2)">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:0" onclick="(function(){var b=document.getElementById(\'hist-body\'),a=document.getElementById(\'hist-arr\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';a.textContent=b.style.display===\'block\'?\'▼\':\'▶\';})()">'
+        +'<div class="ct" style="margin-bottom:0;color:var(--t2)">📂 Histórico de Rotas Antigas <span style="font-size:11px;background:var(--bd);padding:2px 8px;border-radius:99px;font-weight:600">'+enc.length+' rota'+(enc.length>1?'s':'')+'</span></div>'
+        +'<span id="hist-arr" style="font-size:16px;color:var(--t2)">▶</span>'
+        +'</div>'
+        +'<div id="hist-body" style="display:none;margin-top:14px">'+cards+'</div>'
+        +'</div>';
     })()}
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
