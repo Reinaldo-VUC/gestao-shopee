@@ -840,7 +840,7 @@ function remEquipeMembro(i){
   if(ri<0||!DB.cfg.rotas[ri]) return;
   if(!confirm('Remover este membro?')) return;
   DB.cfg.rotas[ri].equipe.splice(i,1); save();
-  document.getElementById('equipe-list-modal').innerHTML=DB.cfg.rotas[ri].equipe.map((m,i2)=>`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">${m.funcao==='motorista'?'🚗':m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</div></div><button class="del" onclick="remEquipeMembro(${i2})">🗑</button></div>`).join('');
+  document.getElementById('equipe-list-modal').innerHTML=DB.cfg.rotas[ri].equipe.map((m,i2)=>`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">${m.funcao==='motorista'?'🚗':m.funcao==='ajudante'?'🤝':m.funcao==='dono'?'👑':'👤'} ${m.nome}${m.funcao==='dono'?' <span style="font-size:10px;color:var(--ac);font-weight:600">dono</span>':''}</div></div><button class="del" onclick="remEquipeMembro(${i2})">🗑</button></div>`).join('');
 }
 function addGanho(){
   const nome=document.getElementById('ganho-nome')?.value.trim();
@@ -1159,8 +1159,9 @@ function prevSem(){
         totalEq+=custoMot;
       }
     }
-    // Equipe adicional
+    // Equipe adicional (exclui dono)
     equipePrev.forEach((m,i)=>{
+      if(m.funcao==='dono') return;
       const el=document.getElementById('eq-ativo-'+i);
       if(el&&!el.checked) return;
       let custo=0;
@@ -1205,6 +1206,7 @@ function saveSem(){
   const equipe=rota?.equipe||[];
   if(equipe.length>0){
     equipe.forEach((m,i)=>{
+      if(m.funcao==='dono') return; // dono não entra no custo
       const el=document.getElementById('eq-ativo-'+i);
       if(el&&!el.checked) return;
       if(m.tipo==='fixo_mensal'){
@@ -2090,7 +2092,7 @@ function modalRota(idx){
     </div>
     <div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase">+ Novo membro</div>
-      <div class="inp-row"><div class="fld"><label class="lbl">Nome</label><input class="inp" id="eq-nome" placeholder="Ex: João Silva"></div><div class="fld"><label class="lbl">Função</label><select class="inp" id="eq-funcao"><option value="motorista">🚗 Motorista</option><option value="ajudante">🤝 Ajudante</option><option value="outros">👤 Outros</option></select></div></div>
+      <div class="inp-row"><div class="fld"><label class="lbl">Nome</label><input class="inp" id="eq-nome" placeholder="Ex: João Silva"></div><div class="fld"><label class="lbl">Função</label><select class="inp" id="eq-funcao"><option value="motorista">🚗 Motorista</option><option value="ajudante">🤝 Ajudante</option><option value="dono">👑 Dono (sem pagamento)</option><option value="outros">👤 Outros</option></select></div></div>
       <div class="fld"><label class="lbl">Tipo de pagamento</label><select class="inp" id="eq-tipo" onchange="togEqTipo(this.value)"><option value="diaria">Diária</option><option value="fixo_mensal">Fixo Mensal</option></select></div>
       <div id="wrap-eq-diaria"><div class="fld"><label class="lbl">Valor diária (R$)</label><input class="inp" type="number" id="eq-diaria" placeholder="Ex: 180"></div></div>
       <div id="wrap-eq-fixo" style="display:none">
@@ -2543,6 +2545,54 @@ function renderFin(){
       </div>`}
     </div>
 
+    <!-- Meu Trabalho em Campo (Dono) -->
+    ${(()=>{
+      // Find all dono members across routes
+      const donoRows=[];
+      f.rotas.forEach(rota=>{
+        (rota.equipe||[]).filter(m=>m.funcao==='dono').forEach(m=>{
+          const semsDoMes=f.sems.filter(s=>s.rotaId===rota.nome);
+          let totalDias=0;
+          const semRows=[];
+          semsDoMes.forEach(s=>{
+            const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);
+            if(!log||!log.nDias) return;
+            const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+            const diasStr=log.diasSel&&log.diasSel.length>0?log.diasSel.map(d=>nomes[d]).join(', '):'—';
+            totalDias+=log.nDias;
+            semRows.push({data:s.data,nDias:log.nDias,diasStr});
+          });
+          donoRows.push({nome:m.nome,rota:rota.nome,totalDias,semRows});
+        });
+      });
+      if(!donoRows.length) return '';
+      return '<div class="card" style="border-left:3px solid var(--ac)">'
+        +'<div class="ct">👑 Meu Trabalho em Campo — '+mALbl(finMes)+'</div>'
+        +donoRows.map(d=>`
+          <div style="margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:8px">
+              ${d.nome} — ${d.rota}
+              <span style="font-size:11px;background:rgba(240,90,40,.12);color:var(--ac);padding:3px 10px;border-radius:99px;margin-left:8px">${d.totalDias} dias no mês</span>
+            </div>
+            ${d.semRows.length===0
+              ?'<div style="font-size:12px;color:var(--t2)">Nenhum dia registrado neste mês.</div>'
+              :d.semRows.map((s,i)=>`
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--s2);border-radius:8px;margin-bottom:6px">
+                  <div>
+                    <div style="font-size:12px;font-weight:700">Sem ${i+1} · ${s.data}</div>
+                    <div style="font-size:11px;color:var(--t2);margin-top:2px">📅 ${s.diasStr}</div>
+                  </div>
+                  <div style="font-size:14px;font-weight:800;color:var(--ac)">${s.nDias}d</div>
+                </div>`).join('')
+            }
+          </div>`).join('')
+        +'<div style="padding:10px 0;border-top:1px solid var(--bd);display:flex;justify-content:space-between">'
+        +'<span class="fw8">Total dias em campo</span>'
+        +'<span class="fw8 c-ac" style="font-size:18px">'+donoRows.reduce((a,d)=>a+d.totalDias,0)+' dias</span>'
+        +'</div>'
+        +'</div>';
+    })()}
+
     <!-- Receitas detalhadas -->
     <div class="card">
       <div class="ct">💰 Receitas Detalhadas — ${mALbl(finMes)}</div>
@@ -2950,7 +3000,7 @@ function calcProximosPagamentos(){
     }
 
     // Ajudantes/equipe diária
-    (rota.equipe||[]).filter(m=>m.tipo==='diaria').forEach(m=>{
+    (rota.equipe||[]).filter(m=>m.tipo==='diaria'&&m.funcao!=='dono').forEach(m=>{
       [{dia:5,q:'Q1',
         pIni:new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0],
         pFim:new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0]},
