@@ -366,6 +366,8 @@ function subscribeData(uid){
         rotas: remote.cfg?.rotas || DB.cfg?.rotas || [],
         fixasExtras: remote.cfg?.fixasExtras || [],
         alertasConcluidos: remote.cfg?.alertasConcluidos || [],
+        pagamentos: remote.cfg?.pagamentos || DB.cfg?.pagamentos || [],
+        calDatas: remote.cfg?.calDatas || DB.cfg?.calDatas || {},
       };
     }
     setSyncState('ok');
@@ -403,7 +405,7 @@ function setSyncState(state){
 <script>
 // ═══════════ DB ═══════════════════════════════════════════════════
 function defCfg(){
-  return { fixoDia:160, pedagioDia:30, pedagioShopee:35, valorPacote:0.50, diaria:120, valeRefeicaoDia:20, financiamento:1800, seguro:0, fixasExtras:[], rotas:[], alertasConcluidos:[], tema:'dark', lem:{nfSeg:true,salario:true,ipva:true,ipvaMes:7,seguro:false,seguroVenc:'',revisao:true,revisaoMeses:3,revisaoUlt:''} };
+  return { fixoDia:160, pedagioDia:30, pedagioShopee:35, valorPacote:0.50, diaria:120, valeRefeicaoDia:20, financiamento:1800, seguro:0, fixasExtras:[], rotas:[], alertasConcluidos:[], pagamentos:[], calDatas:{}, tema:'dark', lem:{nfSeg:true,salario:true,ipva:true,ipvaMes:7,seguro:false,seguroVenc:'',revisao:true,revisaoMeses:3,revisaoUlt:''} };
 }
 let DB = { cfg:defCfg(), semanas:[], variaveis:[] };
 
@@ -523,6 +525,24 @@ function getAlerts(){
   if(l.ipva&&mes===+l.ipvaMes) addAlert({tp:'a-yw',icon:'📋',title:'IPVA vence este mês!',sub:'Providencie o pagamento do IPVA/Licenciamento.',key:'IPVA Mes',acoes:[{label:'💰 Pago'},{label:'🙈 Ignorar'}]});
   if(l.seguro&&l.seguroVenc){const venc=new Date(l.seguroVenc+'T12:00:00'),diff=Math.ceil((venc-now)/86400000);if(diff<=30&&diff>=0) addAlert({tp:'a-rd',icon:'🛡️',title:`Seguro vence em ${diff} dia(s)!`,sub:`Vencimento: ${new Date(l.seguroVenc+'T12:00:00').toLocaleDateString('pt-BR')}`,key:'Seguro Vence',acoes:[{label:'💰 Pago'},{label:'📅 Renovado'},{label:'🙈 Ignorar'}]});}
   if(l.revisao&&l.revisaoUlt){const ult=new Date(l.revisaoUlt+'T12:00:00'),prox=new Date(ult);prox.setMonth(prox.getMonth()+(+l.revisaoMeses||3));const diff=Math.ceil((prox-now)/86400000);if(diff<0) addAlert({tp:'a-rd',icon:'🔧',title:'Revisão atrasada!',sub:`Prevista: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisao Atrasada',acoes:[{label:'🔧 Feita'},{label:'📅 Reagendar'},{label:'🙈 Ignorar'}]});else if(diff<=15) addAlert({tp:'a-yw',icon:'🔧',title:`Revisão em ${diff} dia(s)`,sub:`Próxima: ${prox.toLocaleDateString('pt-BR')}`,key:'Revisao Proxima',acoes:[{label:'🔧 Feita'},{label:'🙈 Ignorar'}]});}
+  // Alertas de pagamento equipe
+  if(typeof calcProximosPagamentos==='function'){
+    try{
+      calcProximosPagamentos().forEach(function(p){
+        if(p.status==='pago') return;
+        var vDate=new Date(p.vencimento+'T12:00:00');
+        var diff=Math.ceil((vDate-now)/86400000);
+        if(diff<=3&&diff>=-1){
+          var quando=diff<0?'ATRASADO':diff===0?'HOJE':diff===1?'AMANHÃ':'em '+diff+' dias';
+          addAlert({tp:diff<0?'a-rd':diff<=1?'a-or':'a-bl',icon:'💰',
+            title:'Pagamento '+quando+': '+p.membro,
+            sub:R$(p.valor)+' · '+p.quinzena,
+            key:'pgto_'+p.chave,
+            acoes:[{label:'💰 Pagar'},{label:'🙈 Ignorar'}]});
+        }
+      });
+    }catch(e){}
+  }
   return al;
 }
 
@@ -858,7 +878,9 @@ window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0;
     if(el){ const ra=(DB.cfg.rotas||[]).find(r=>!r.dataFim); refreshEquipeModal(ra?.nome||''); }
     else if(n>0) setTimeout(()=>tryEq(n-1),80);
   })(8);
-} if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
+} if(t==='var') mi.innerHTML=modalVar(); if(t==='rota'){_modalRotaIdx=(DB.cfg.rotas||[]).length; mi.innerHTML=modalRota();} if(t==='editRota') mi.innerHTML=modalRota(extra); if(t==='editCal') mi.innerHTML=modalEditCal();
+  if(t==='pagto') mi.innerHTML=modalPagamento(extra);
+  if(t==='pagManual') mi.innerHTML=modalPagamentoManual(); document.getElementById('ov').classList.add('open'); if(t==='anal') setTimeout(calcSim,50); };
 window.closeModal=()=>document.getElementById('ov').classList.remove('open');
 
 function modalSem(s){
@@ -2435,10 +2457,51 @@ function renderFin(){
       </div>
     </div>
 
-    <!-- Calendário de Pagamentos -->
+    <!-- Pagamentos da Equipe -->
     <div class="card" style="border-left:3px solid var(--bl)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div class="ct" style="margin-bottom:0">📅 Calendário de Pagamentos — ${mALbl(finMes)}</div>
+        <div class="ct" style="margin-bottom:0">💰 Pagamentos da Equipe</div>
+        <button onclick="openModal('pagManual')" class="btn bsm bgh">+ Pagamento manual</button>
+      </div>
+      ${(()=>{
+        const pgtos=calcProximosPagamentos();
+        if(!pgtos.length) return '<div style="color:var(--t2);font-size:13px;text-align:center;padding:12px">Nenhum membro com pagamento configurado.<br>Configure motorista e ajudantes nas rotas.</div>';
+        const now=new Date(), hoje=now.toISOString().split('T')[0];
+        return pgtos.map(p=>{
+          const atrasado=p.status!=='pago'&&p.vencimento<hoje;
+          const hojeVence=p.status!=='pago'&&p.vencimento===hoje;
+          const amanha=p.status!=='pago'&&p.vencimento===new Date(now.getTime()+86400000).toISOString().split('T')[0];
+          return `<div class="item" style="background:${hojeVence?'rgba(240,90,40,.06)':atrasado?'rgba(244,63,94,.04)':'var(--s2)'};opacity:${p.status==='pago'?0.6:1};margin-bottom:8px;border-radius:10px;padding:12px">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span class="fw8" style="font-size:13px">${p.tipo==='motorista_fixo'?'🚗':'🤝'} ${p.membro}</span>
+                ${p.status==='pago'?`<span style="font-size:10px;background:rgba(52,211,153,.15);color:var(--gn);padding:2px 8px;border-radius:99px;font-weight:700">✅ Pago em ${p.dataPago}</span>`:''}
+                ${atrasado?'<span style="font-size:10px;background:rgba(244,63,94,.15);color:var(--rd);padding:2px 8px;border-radius:99px;font-weight:700">⚠️ ATRASADO</span>':''}
+                ${hojeVence?'<span style="font-size:10px;background:rgba(240,90,40,.15);color:var(--ac);padding:2px 8px;border-radius:99px;font-weight:700">HOJE</span>':''}
+                ${amanha?'<span style="font-size:10px;background:rgba(251,191,36,.15);color:var(--yw);padding:2px 8px;border-radius:99px;font-weight:700">AMANHÃ</span>':''}
+              </div>
+              <div style="font-size:11px;color:var(--t2)">${p.quinzena}</div>
+              ${p.tipo==='ajudante_diaria'&&p.totalDias>0?`<div style="font-size:11px;color:var(--yw);margin-top:3px">📅 ${p.totalDias} dias trabalhados</div>`:''}
+              ${p.diasDetalhe&&p.diasDetalhe.length>0?p.diasDetalhe.map(d=>`<div style="font-size:10px;color:var(--t2);margin-left:8px">• Sem ${d.sem}: ${d.dias} (${d.n}d)</div>`).join(''):''}
+              ${p.valorExtra>0?`<div style="font-size:11px;color:var(--gn);margin-top:2px">+ ${p.sabExtras} sáb. extra = +${R$(p.valorExtra)}</div>`:''}
+              ${p.status==='pago'&&p.valorPago!==p.valor?`<div style="font-size:11px;color:var(--yw)">💬 Valor pago: ${R$(p.valorPago)}${p.obs?' — '+p.obs:''}</div>`:''}
+              ${p.obs&&p.status==='pago'&&p.valorPago===p.valor?`<div style="font-size:11px;color:var(--t2)">💬 ${p.obs}</div>`:''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;margin-left:10px">
+              <span class="fw8" style="font-size:15px;color:${p.status==='pago'?'var(--t2)':'var(--bl)'}">${R$(p.status==='pago'?p.valorPago:p.valor)}</span>
+              <button onclick="openModal('pagto','${p.chave}')" style="background:${p.status==='pago'?'var(--s2)':'rgba(96,165,250,.15)'};border:1px solid ${p.status==='pago'?'var(--bd)':'rgba(96,165,250,.3)'};border-radius:6px;cursor:pointer;font-size:11px;padding:4px 10px;color:${p.status==='pago'?'var(--t2)':'var(--bl)'};font-weight:700">
+                ${p.status==='pago'?'✏️ Editar':'💰 Pagar'}
+              </button>
+            </div>
+          </div>`;
+        }).join('');
+      })()}
+    </div>
+
+    <!-- Calendário de Despesas Fixas -->
+    <div class="card" style="border-left:3px solid var(--rd)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="ct" style="margin-bottom:0">📅 Despesas Fixas — ${mALbl(finMes)}</div>
         <button onclick="openModal('editCal')" class="btn bsm bgh">✏️ Datas</button>
       </div>
       ${calItems.length===0?`<div style="color:var(--t2);font-size:13px;text-align:center;padding:16px">
@@ -2810,6 +2873,211 @@ window.saveCalDatas=function(){
   });
   save(); closeModal(); render();
   showToast('✅ Datas salvas!');
+};
+
+// ═══════════ SISTEMA DE PAGAMENTOS DA EQUIPE ═════════════════════
+
+// Calcula período da quinzena
+function getQuinzena(data){
+  const d=new Date(data+'T12:00:00'), dia=d.getDate();
+  if(dia<=5){
+    // Q1: 21 mês anterior até 05 mês atual
+    const ant=new Date(d.getFullYear(),d.getMonth()-1,21);
+    return {q:'Q1',inicio:ant.toISOString().split('T')[0],fim:data,label:'21/'+String(d.getMonth()).padStart(2,'0')+' a 05/'+String(d.getMonth()+1).padStart(2,'0')};
+  } else if(dia<=20){
+    // Q2: 06 até 20 do mês atual
+    const ini=new Date(d.getFullYear(),d.getMonth(),6);
+    return {q:'Q2',inicio:ini.toISOString().split('T')[0],fim:data,label:'06/'+String(d.getMonth()+1).padStart(2,'0')+' a 20/'+String(d.getMonth()+1).padStart(2,'0')};
+  } else {
+    // Q1 próxima: 21 até 05 próximo mês
+    const fim=new Date(d.getFullYear(),d.getMonth()+1,5);
+    return {q:'Q1',inicio:data,fim:fim.toISOString().split('T')[0],label:'21/'+String(d.getMonth()+1).padStart(2,'0')+' a 05/'+String(d.getMonth()+2).padStart(2,'0')};
+  }
+}
+
+// Calcula dias do ajudante num período
+function calcDiasAjudante(membro, rotaId, periodoInicio, periodoFim){
+  const sems=DB.semanas.filter(s=>s.rotaId===rotaId);
+  let totalDias=0, totalVal=0, diasDetalhe=[];
+  sems.forEach(s=>{
+    if(!s.equipeLog) return;
+    const log=s.equipeLog.find(l=>l.nome===membro.nome);
+    if(!log||!log.nDias) return;
+    // Check if semana falls within period
+    if(s.data>=periodoInicio&&s.data<=periodoFim){
+      totalDias+=log.nDias;
+      totalVal+=(+membro.diaria||0)*log.nDias;
+      const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+      if(log.diasSel&&log.diasSel.length>0) diasDetalhe.push({sem:s.data,dias:log.diasSel.map(d=>nomes[d]).join(','),n:log.nDias});
+    }
+  });
+  return {totalDias,totalVal,diasDetalhe};
+}
+
+// Calcula próximos pagamentos pendentes
+function calcProximosPagamentos(){
+  const now=new Date(), hoje=now.toISOString().split('T')[0];
+  const pagtos=DB.cfg.pagamentos||[];
+  const pendentes=[];
+  const rotas=DB.cfg.rotas||[];
+
+  rotas.forEach(rota=>{
+    if(rota.dataFim) return; // só rotas ativas
+
+    // Motorista fixo
+    if(rota.motTipo==='fixo'&&rota.motNome){
+      [
+        {dia:5,q:'Q1',label:'1ª quinzena (21→05)'},
+        {dia:20,q:'Q2',label:'2ª quinzena (06→20)'}
+      ].forEach(pgto=>{
+        const venc=new Date(now.getFullYear(),now.getMonth(),pgto.dia);
+        const vencStr=venc.toISOString().split('T')[0];
+        const mStr=String(venc.getMonth()+1).padStart(2,'0')+'/'+venc.getFullYear();
+        const jaFoi=pgto.dia<now.getDate()&&venc.getMonth()===now.getMonth();
+        const chave='mot_'+rota.nome+'_'+pgto.q+'_'+mStr;
+        const pago=pagtos.find(p=>p.chave===chave);
+        // Sábados extras da quinzena
+        const sabsQ=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&s.data>=vencStr).length;
+        const sabsTot=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&mAStr(s.data)===mStr).length;
+        const sabExt=Math.max(0,sabsTot-(+rota.motSabInclusos||2));
+        const valBase=pgto.q==='Q1'?+rota.motPag1Val||2000:+rota.motPag2Val||2000;
+        const valExtra=pgto.q==='Q2'?sabExt*(+rota.motSabExtra||0):0;
+        pendentes.push({
+          chave,membro:rota.motNome,tipo:'motorista_fixo',rota:rota.nome,
+          quinzena:pgto.label,vencimento:vencStr,valorBase:valBase,valorExtra:valExtra,
+          valor:valBase+valExtra,sabExtras:sabExt,status:pago?'pago':'pendente',
+          dataPago:pago?.dataPago,valorPago:pago?.valorPago,obs:pago?.obs,id:chave
+        });
+      });
+    }
+
+    // Ajudantes/equipe diária
+    (rota.equipe||[]).filter(m=>m.tipo==='diaria').forEach(m=>{
+      [
+        {dia:5,q:'Q1',pIni:new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0],pFim:new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0]},
+        {dia:20,q:'Q2',pIni:new Date(now.getFullYear(),now.getMonth(),6).toISOString().split('T')[0],pFim:new Date(now.getFullYear(),now.getMonth(),20).toISOString().split('T')[0]}
+      ].forEach(pgto=>{
+        const mStr=String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+        const chave='adj_'+m.nome+'_'+pgto.q+'_'+mStr;
+        const pago=pagtos.find(p=>p.chave===chave);
+        const calc=calcDiasAjudante(m,rota.nome,pgto.pIni,pgto.pFim);
+        if(calc.totalDias>0||!pago){
+          pendentes.push({
+            chave,membro:m.nome,tipo:'ajudante_diaria',rota:rota.nome,
+            quinzena:'Período '+pgto.pIni+' a '+pgto.pFim,
+            periodoInicio:pgto.pIni,periodoFim:pgto.pFim,
+            vencimento:new Date(now.getFullYear(),now.getMonth(),pgto.dia).toISOString().split('T')[0],
+            valorBase:calc.totalVal,valor:calc.totalVal,
+            totalDias:calc.totalDias,diasDetalhe:calc.diasDetalhe,
+            status:pago?'pago':'pendente',dataPago:pago?.dataPago,
+            valorPago:pago?.valorPago,obs:pago?.obs,id:chave
+          });
+        }
+      });
+    });
+  });
+  return pendentes.sort((a,b)=>a.vencimento>b.vencimento?1:-1);
+}
+
+// Modal para registrar pagamento
+window.modalPagamento=function(chave){
+  const pgtos=calcProximosPagamentos();
+  const p=pgtos.find(x=>x.chave===chave)||{};
+  const jaPago=DB.cfg.pagamentos?.find(x=>x.chave===chave);
+  return `
+    <div class="mh"><span class="mt">${jaPago?'Editar':'Registrar'} Pagamento</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div style="background:var(--s2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div class="fw8" style="font-size:14px">${p.tipo==='motorista_fixo'?'🚗':'🤝'} ${p.membro}</div>
+      <div style="font-size:12px;color:var(--t2);margin-top:3px">${p.rota} · ${p.quinzena}</div>
+      ${p.tipo==='ajudante_diaria'&&p.totalDias>0?`<div style="font-size:12px;color:var(--yw);margin-top:4px">📅 ${p.totalDias} dias trabalhados → valor sugerido: ${R$(p.valor)}</div>`:''}
+      ${p.valorExtra>0?`<div style="font-size:12px;color:var(--gn);margin-top:3px">+ ${p.sabExtras} sáb. extra × R$${p.tipo==='motorista_fixo'?'170':'—'} = +${R$(p.valorExtra)}</div>`:''}
+    </div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Período início</label>
+        <input class="inp" type="date" id="pg-ini" value="${jaPago?.periodoInicio||p.periodoInicio||''}">
+      </div>
+      <div class="fld"><label class="lbl">Período fim</label>
+        <input class="inp" type="date" id="pg-fim" value="${jaPago?.periodoFim||p.periodoFim||''}">
+      </div>
+    </div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Data do pagamento</label>
+        <input class="inp" type="date" id="pg-data" value="${jaPago?.dataPago||today()}">
+      </div>
+      <div class="fld"><label class="lbl">Valor pago (R$)</label>
+        <input class="inp" type="number" id="pg-valor" value="${jaPago?.valorPago||p.valor||''}" placeholder="Ex: 2000,00">
+      </div>
+    </div>
+    <div class="fld"><label class="lbl">Observação (opcional)</label>
+      <input class="inp" id="pg-obs" value="${jaPago?.obs||''}" placeholder="Ex: Valor ajustado, período de teste...">
+    </div>
+    <input type="hidden" id="pg-chave" value="${chave}">
+    <button class="btn" onclick="salvarPagamento()">💰 Confirmar pagamento</button>
+    ${jaPago?`<button class="btn brd" onclick="excluirPagamento('${chave}')" style="margin-top:8px;background:rgba(244,63,94,.1);border-color:var(--rd);color:var(--rd)">🗑 Remover pagamento</button>`:''}`;
+};
+
+// Modal para pagamento manual (novo)
+window.modalPagamentoManual=function(){
+  const rotas=(DB.cfg.rotas||[]).filter(r=>!r.dataFim);
+  const membros=[];
+  rotas.forEach(rota=>{
+    if(rota.motNome) membros.push({nome:rota.motNome,tipo:'motorista_fixo',rota:rota.nome});
+    (rota.equipe||[]).forEach(m=>membros.push({nome:m.nome,tipo:m.tipo==='fixo_mensal'?'motorista_fixo':'ajudante_diaria',rota:rota.nome}));
+  });
+  return `
+    <div class="mh"><span class="mt">💰 Pagamento Manual</span><button class="mc" onclick="closeModal()">×</button></div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Registre um pagamento com valor ou período diferente do padrão.</div>
+    <div class="fld"><label class="lbl">Membro</label>
+      <select class="inp" id="pgm-membro">
+        ${membros.map(m=>`<option value="${m.nome}|${m.rota}">${m.tipo==='motorista_fixo'?'🚗':'🤝'} ${m.nome} — ${m.rota}</option>`).join('')}
+      </select>
+    </div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Período início</label><input class="inp" type="date" id="pgm-ini" value="${new Date(new Date().getFullYear(),new Date().getMonth()-1,21).toISOString().split('T')[0]}"></div>
+      <div class="fld"><label class="lbl">Período fim</label><input class="inp" type="date" id="pgm-fim" value="${today()}"></div>
+    </div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Data do pagamento</label><input class="inp" type="date" id="pgm-data" value="${today()}"></div>
+      <div class="fld"><label class="lbl">Valor pago (R$)</label><input class="inp" type="number" id="pgm-valor" placeholder="Ex: 1850,00"></div>
+    </div>
+    <div class="fld"><label class="lbl">Observação</label><input class="inp" id="pgm-obs" placeholder="Ex: Período de teste, valor acordado..."></div>
+    <button class="btn" onclick="salvarPagamentoManual()">💰 Registrar pagamento</button>`;
+};
+
+window.salvarPagamento=function(){
+  const chave=document.getElementById('pg-chave')?.value;
+  const dataPago=document.getElementById('pg-data')?.value;
+  const valorPago=+document.getElementById('pg-valor')?.value||0;
+  const obs=document.getElementById('pg-obs')?.value||'';
+  const ini=document.getElementById('pg-ini')?.value||'';
+  const fim=document.getElementById('pg-fim')?.value||'';
+  if(!dataPago||!valorPago){alert('Preencha data e valor.');return;}
+  if(!DB.cfg.pagamentos) DB.cfg.pagamentos=[];
+  const idx=DB.cfg.pagamentos.findIndex(p=>p.chave===chave);
+  const reg={chave,dataPago,valorPago,obs,periodoInicio:ini,periodoFim:fim,status:'pago'};
+  if(idx>=0) DB.cfg.pagamentos[idx]=reg; else DB.cfg.pagamentos.push(reg);
+  save(); closeModal(); render(); showToast('✅ Pagamento registrado!');
+};
+
+window.salvarPagamentoManual=function(){
+  const sel=document.getElementById('pgm-membro')?.value.split('|');
+  const nome=sel?.[0]||'', rota=sel?.[1]||'';
+  const ini=document.getElementById('pgm-ini')?.value||'';
+  const fim=document.getElementById('pgm-fim')?.value||'';
+  const dataPago=document.getElementById('pgm-data')?.value||'';
+  const valorPago=+document.getElementById('pgm-valor')?.value||0;
+  const obs=document.getElementById('pgm-obs')?.value||'';
+  if(!dataPago||!valorPago){alert('Preencha data e valor.');return;}
+  if(!DB.cfg.pagamentos) DB.cfg.pagamentos=[];
+  const chave='manual_'+nome+'_'+dataPago+'_'+Math.random().toString(36).slice(2,6);
+  DB.cfg.pagamentos.push({chave,membro:nome,rota,periodoInicio:ini,periodoFim:fim,dataPago,valorPago,obs,status:'pago',tipo:'manual'});
+  save(); closeModal(); render(); showToast('✅ Pagamento manual registrado!');
+};
+
+window.excluirPagamento=function(chave){
+  if(!confirm('Remover este pagamento?')) return;
+  DB.cfg.pagamentos=(DB.cfg.pagamentos||[]).filter(p=>p.chave!==chave);
+  save(); closeModal(); render(); showToast('🗑 Pagamento removido.');
 };
 
 function showToast(msg){
