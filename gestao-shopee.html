@@ -708,16 +708,23 @@ function renderEnt(){
 
 // ═══════════ DESPESAS ═════════════════════════════════════════════
 function renderDesp(){
-  const cx=compute(),c=DB.cfg,grp=grpBy(DB.variaveis),keys=Object.keys(grp);
-  const fixasList=[{nome:'Salário do Motorista',valor:c.salarioBase},{nome:'Vale Refeição',valor:c.valeRefeicaoDia},{nome:'Financiamento/Aluguel',valor:c.financiamento},{nome:'Seguro do Veículo',valor:c.seguro},...(c.fixasExtras||[])];
+  const cx=computeRota('geral'),c=DB.cfg,grp=grpBy(DB.variaveis),keys=Object.keys(grp);
+  // Usa rota ativa para custo motorista
+  const rotaAtiva=(DB.cfg.rotas||[]).find(r=>!r.dataFim);
+  const ma=curMA();
+  const semsAtivas=DB.semanas.filter(s=>mAStr(s.data)===ma&&(!rotaAtiva||s.rotaId===rotaAtiva.nome));
+  const custoMotMes=semsAtivas.reduce((a,s)=>a+(+s.custoMot||0),0);
+  const totDiasMes=semsAtivas.reduce((a,s)=>a+(+s.dias||0),0);
+  const fixasList=[{nome:'Financiamento/Aluguel',valor:c.financiamento},{nome:'Seguro do Veículo',valor:c.seguro},...(c.fixasExtras||[])];
   return `<div class="sh"><div class="st">Despesas</div><div style="display:flex;gap:8px"><button class="btn bsm" onclick="openModal('var')">+ Variável</button><button class="btn bsm bgh" onclick="go('cfg')">⚙️ Fixas</button></div></div>
     <div class="two-col">
-      <div class="card" style="border-left:3px solid var(--bl)"><div class="ct">👤 Custo Motorista</div>
-        <div class="row"><span class="rl">Diária</span><span class="rv">${R$(c.diaria)}/dia</span></div>
-        <div class="row"><span class="rl">Vale Refeição</span><span class="rv">${R$(c.valeRefeicaoDia)}/dia</span></div>
-        <div class="row"><span class="rl">Custo/dia total</span><span class="rv">${R$((+c.diaria||0)+(+c.valeRefeicaoDia||0))}</span></div>
-        <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px"><span class="fw8" style="font-size:13px">Acumulado este mês</span><span class="fw8 c-bl" style="font-size:15px">${R$(cx.custoMot)}</span></div>
-        <div style="font-size:11px;color:var(--t2);margin-top:4px">${cx.totDias} dias trabalhados no mês</div>
+      <div class="card" style="border-left:3px solid var(--bl)"><div class="ct">👤 Custo Equipe — ${rotaAtiva?.nome||'Geral'}</div>
+        ${rotaAtiva?.motNome?`<div class="row"><span class="rl">🚗 ${rotaAtiva.motNome} (motorista)</span><span class="rv c-bl">${rotaAtiva.motTipo==='fixo'?R$(rotaAtiva.motFixoMensal||0)+'/mês':R$(rotaAtiva.motDiaPadrao||0)+'/dia'}</span></div>`:''}
+        ${(rotaAtiva?.equipe||[]).filter(m=>m.funcao!=='dono').map(m=>`<div class="row"><span class="rl">${m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</span><span class="rv">${m.tipo==='fixo_mensal'?R$(m.fixoMensal||0)+'/mês':R$(m.diaria||0)+'/dia'}</span></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--bd)">
+          <div><span class="fw8" style="font-size:13px">Acumulado este mês</span><div style="font-size:11px;color:var(--t2);margin-top:3px">${totDiasMes} dias · ${semsAtivas.length} semana(s)</div></div>
+          <span class="fw8 c-bl" style="font-size:15px">${R$(custoMotMes)}</span>
+        </div>
       </div>
       <div class="card" style="border-left:3px solid var(--rd)"><div class="ct">Despesas Fixas Mensais</div>
         <div class="row"><span class="rl">Financiamento/Aluguel</span><span class="rv c-rd">${R$(c.financiamento)}</span></div>
