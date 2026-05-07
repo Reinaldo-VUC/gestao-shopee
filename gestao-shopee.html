@@ -1064,8 +1064,10 @@ function onRotaSemChange(){
 function togDay(i){
   const btn=document.getElementById('day-'+i); if(!btn)return;
   btn.classList.toggle('on');
-  // Conta dias na ordem correta (0=Seg,1=Ter,...,5=Sáb) mantendo a sequência
+  // Conta dias na ordem correta (0=Seg,1=Ter,...,5=Sáb)
   selDias=document.querySelectorAll('.day-btn.on').length;
+  // Sáb = índice 5 — atualiza _teveSabado automaticamente
+  if(i===5) _teveSabado=btn.classList.contains('on');
   const c=DB.cfg, rota=getRotaSelecionada();
   const fixoDia = rota?+rota.fixoDia||c.fixoDia:c.fixoDia||0;
   const motDia  = rota?(+rota.motDiaPadrao||(+c.diaria||0)+(+c.valeRefeicaoDia||0)):(+c.diaria||0)+(+c.valeRefeicaoDia||0);
