@@ -718,13 +718,42 @@ function renderDesp(){
   const fixasList=[{nome:'Financiamento/Aluguel',valor:c.financiamento},{nome:'Seguro do Veículo',valor:c.seguro},...(c.fixasExtras||[])];
   return `<div class="sh"><div class="st">Despesas</div><div style="display:flex;gap:8px"><button class="btn bsm" onclick="openModal('var')">+ Variável</button><button class="btn bsm bgh" onclick="go('cfg')">⚙️ Fixas</button></div></div>
     <div class="two-col">
-      <div class="card" style="border-left:3px solid var(--bl)"><div class="ct">👤 Custo Equipe — ${rotaAtiva?.nome||'Geral'}</div>
-        ${rotaAtiva?.motNome?`<div class="row"><span class="rl">🚗 ${rotaAtiva.motNome} (motorista)</span><span class="rv c-bl">${rotaAtiva.motTipo==='fixo'?R$(rotaAtiva.motFixoMensal||0)+'/mês':R$(rotaAtiva.motDiaPadrao||0)+'/dia'}</span></div>`:''}
-        ${(rotaAtiva?.equipe||[]).filter(m=>m.funcao!=='dono').map(m=>`<div class="row"><span class="rl">${m.funcao==='ajudante'?'🤝':'👤'} ${m.nome}</span><span class="rv">${m.tipo==='fixo_mensal'?R$(m.fixoMensal||0)+'/mês':R$(m.diaria||0)+'/dia'}</span></div>`).join('')}
-        <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--bd)">
-          <div><span class="fw8" style="font-size:13px">Acumulado este mês</span><div style="font-size:11px;color:var(--t2);margin-top:3px">${totDiasMes} dias · ${semsAtivas.length} semana(s)</div></div>
-          <span class="fw8 c-bl" style="font-size:15px">${R$(custoMotMes)}</span>
-        </div>
+      <div class="card" style="border-left:3px solid var(--bl)">
+        <div class="ct">👤 Custo Equipe — ${rotaAtiva?.nome||'Geral'}</div>
+        ${(()=>{
+          if(!rotaAtiva) return '<div style="color:var(--t2);font-size:13px">Nenhuma rota ativa.</div>';
+          const status=calcEquipeStatus(rotaAtiva);
+          const totalPagoMes=(DB.cfg.pagamentos||[]).filter(p=>mAStr(p.dataPago)===curMA()).reduce((a,p)=>a+(+p.valorPago||0),0);
+          const totalAcumMes=status.reduce((a,s)=>a+(+s.acumulado||0),0);
+          const proxPag=status.reduce((a,s)=>a+(+s.proxVal||0),0);
+          return status.map(s=>`
+            <div style="background:var(--s2);border-radius:10px;padding:12px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+                <div>
+                  <div class="fw8" style="font-size:13px">${s.funcao==='motorista'?'🚗':s.funcao==='ajudante'?'🤝':'👤'} ${s.nome}</div>
+                  <div style="font-size:11px;color:var(--t2)">${s.tipo==='fixo_mensal'||s.tipo==='motorista_fixo'?'Fixo mensal':'R$'+s.diaria+'/dia'}</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="fw8 c-bl" style="font-size:15px">${R$(s.acumulado)}</div>
+                  <div style="font-size:10px;color:var(--t2)">acumulado</div>
+                </div>
+              </div>
+              ${s.ultimoPag?`<div style="font-size:11px;padding:5px 8px;background:rgba(52,211,153,.08);border-radius:6px;margin-bottom:6px">✅ Último pag: ${R$(s.ultimoPag.valorPago)} em ${s.ultimoPag.dataPago}</div>`:'<div style="font-size:11px;color:var(--yw);padding:5px 8px;background:rgba(251,191,36,.08);border-radius:6px;margin-bottom:6px">⚠️ Sem pagamentos registrados</div>'}
+              ${s.diasDetalhe&&s.diasDetalhe.length>0?s.diasDetalhe.map(d=>`<div style="font-size:10px;color:var(--t2);margin-left:4px">• Sem ${d.sem}: ${d.dias} (${d.n}d)</div>`).join(''):''}
+              ${s.diasAcum!=null?`<div style="font-size:11px;color:var(--t2);margin-top:4px">📅 ${s.diasAcum} dias desde ${s.quinzenaInicio}</div>`:''}
+              ${s.sabExtras>0?`<div style="font-size:11px;color:var(--gn);margin-top:3px">+ ${s.sabExtras} sáb. extra = +${R$(s.extraVal)}</div>`:''}
+              <div style="font-size:11px;color:var(--t2);margin-top:5px;padding-top:5px;border-top:1px solid var(--bd)">
+                ⏳ Próx. pagamento: <b style="color:var(--bl)">${R$(s.proxVal)}</b> até dia ${s.proxVenc}
+              </div>
+            </div>`).join('')
+          +'<div style="display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bd);margin-top:4px">'
+          +'<div><div class="fw8" style="font-size:13px">Resumo Maio</div>'
+          +'<div style="font-size:11px;color:var(--gn)">✅ Pago: '+R$(totalPagoMes)+'</div>'
+          +'<div style="font-size:11px;color:var(--yw)">⏳ A pagar: '+R$(proxPag)+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:11px;color:var(--t2)">Custo total mês</div>'
+          +'<div class="fw8 c-bl" style="font-size:16px">'+R$(totalPagoMes+proxPag)+'</div></div>'
+          +'</div>';
+        })()}
       </div>
       <div class="card" style="border-left:3px solid var(--rd)"><div class="ct">Despesas Fixas Mensais</div>
         <div class="row"><span class="rl">Financiamento/Aluguel</span><span class="rv c-rd">${R$(c.financiamento)}</span></div>
@@ -3154,6 +3183,92 @@ window.excluirPagamento=function(chave){
   save(); closeModal(); render(); showToast('🗑 Pagamento removido.');
 };
 
+
+// Calcula status atual da equipe (último pagamento + acumulado)
+function calcEquipeStatus(rota){
+  if(!rota) return [];
+  const pagtos=DB.cfg.pagamentos||[];
+  const now=new Date(), hoje=now.toISOString().split('T')[0];
+  const result=[];
+
+  // ── Motorista principal ──────────────────────────────────────
+  if(rota.motNome && rota.motTipo==='fixo'){
+    const pgMotor=pagtos.filter(p=>p.membro===rota.motNome).sort((a,b)=>b.dataPago>a.dataPago?1:-1);
+    const ultimoPag=pgMotor[0]||null;
+    // Próxima quinzena
+    const dia=now.getDate();
+    let proxVenc, proxVal, quinzenaInicio;
+    if(dia<=5){
+      // Estamos antes do dia 5 - quinzena Q1 vence hoje/em breve
+      proxVenc=new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0];
+      quinzenaInicio=new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0];
+      proxVal=(+rota.motPag1Val||2000);
+    } else if(dia<=20){
+      // Entre 6 e 20 - Q2 vence dia 20
+      proxVenc=new Date(now.getFullYear(),now.getMonth(),20).toISOString().split('T')[0];
+      quinzenaInicio=new Date(now.getFullYear(),now.getMonth(),6).toISOString().split('T')[0];
+      proxVal=(+rota.motPag2Val||2000);
+    } else {
+      // Depois do 20 - Q1 do próximo mês
+      proxVenc=new Date(now.getFullYear(),now.getMonth()+1,5).toISOString().split('T')[0];
+      quinzenaInicio=new Date(now.getFullYear(),now.getMonth(),21).toISOString().split('T')[0];
+      proxVal=(+rota.motPag1Val||2000);
+    }
+    // Sábados extras nesta quinzena
+    const sabsQ=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&s.data>=quinzenaInicio&&s.data<=proxVenc).length;
+    const sabsTotMes=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&mAStr(s.data)===curMA()).length;
+    const sabExt=Math.max(0,sabsTotMes-(+rota.motSabInclusos||2));
+    const extraVal=sabExt*(+rota.motSabExtra||0);
+    // Acumulado proporcional desde início da quinzena
+    const daysInQuinzena=dia<=5?15:14; // aprox
+    const daysElapsed=Math.max(1,Math.ceil((now-new Date(quinzenaInicio+'T12:00:00'))/86400000));
+    const acumulado=Math.min(proxVal+extraVal, (proxVal/daysInQuinzena)*daysElapsed+extraVal);
+    result.push({
+      nome:rota.motNome, tipo:'motorista_fixo', funcao:'motorista',
+      ultimoPag, proxVenc, proxVal:proxVal+extraVal,
+      acumulado, quinzenaInicio, sabExtras:sabExt, extraVal,
+      jaFoiPago:pagtos.some(p=>p.membro===rota.motNome&&p.chave&&p.chave.includes(dia<=5?'Q1':'Q2')&&p.chave.includes(String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear()))
+    });
+  }
+
+  // ── Equipe adicional ─────────────────────────────────────────
+  (rota.equipe||[]).filter(m=>m.funcao!=='dono').forEach(m=>{
+    const pgMem=pagtos.filter(p=>p.membro===m.nome).sort((a,b)=>b.dataPago>a.dataPago?1:-1);
+    const ultimoPag=pgMem[0]||null;
+    const ultimaDataPag=ultimoPag?.dataPago||new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0];
+    // Próximo vencimento
+    const dia=now.getDate();
+    let proxVenc, quinzenaInicio;
+    if(dia<=5){ proxVenc=new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0]; quinzenaInicio=new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0]; }
+    else if(dia<=20){ proxVenc=new Date(now.getFullYear(),now.getMonth(),20).toISOString().split('T')[0]; quinzenaInicio=new Date(now.getFullYear(),now.getMonth(),6).toISOString().split('T')[0]; }
+    else { proxVenc=new Date(now.getFullYear(),now.getMonth()+1,5).toISOString().split('T')[0]; quinzenaInicio=new Date(now.getFullYear(),now.getMonth(),21).toISOString().split('T')[0]; }
+    // Dias trabalhados desde último pagamento
+    const inicioRef=ultimaDataPag>quinzenaInicio?ultimaDataPag:quinzenaInicio;
+    let diasAcum=0, valorAcum=0, diasDetalhe=[];
+    if(m.tipo==='diaria'){
+      DB.semanas.filter(s=>s.rotaId===rota.nome&&s.data>inicioRef&&s.data<=proxVenc).forEach(s=>{
+        const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);
+        if(log&&log.nDias>0){
+          diasAcum+=log.nDias;
+          valorAcum+=(+m.diaria||0)*log.nDias;
+          const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+          diasDetalhe.push({sem:s.data,dias:log.diasSel?.map(d=>nomes[d]).join(',')||'',n:log.nDias});
+        }
+      });
+    } else {
+      valorAcum=(+m.fixoMensal||0)/4.3;
+      diasAcum=null;
+    }
+    result.push({
+      nome:m.nome, tipo:m.tipo, funcao:m.funcao,
+      ultimoPag, proxVenc, proxVal:valorAcum,
+      acumulado:valorAcum, quinzenaInicio:inicioRef,
+      diasAcum, valorAcum, diasDetalhe,
+      diaria:m.diaria
+    });
+  });
+  return result;
+}
 function showToast(msg){
   const t=document.createElement('div');
   t.textContent=msg;
