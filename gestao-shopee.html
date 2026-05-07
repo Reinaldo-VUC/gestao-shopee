@@ -1071,7 +1071,12 @@ function togDay(i){
   const motDia  = rota?(+rota.motDiaPadrao||(+c.diaria||0)+(+c.valeRefeicaoDia||0)):(+c.diaria||0)+(+c.valeRefeicaoDia||0);
   const dEl=document.getElementById('dias-count'); if(dEl) dEl.textContent=selDias+' dia'+(selDias!==1?'s':'');
   const fEl=document.getElementById('dias-fixo');  if(fEl) fEl.textContent=R$(fixoDia*selDias);
-  const mEl=document.getElementById('dias-mot');   if(mEl) mEl.textContent=R$(motDia*selDias);
+  // Calculate correct motorista cost from rota
+  const _rotaTD=getRotaSelecionada();
+  let _motTD=0;
+  if(_rotaTD?.motTipo==='fixo') _motTD=(+_rotaTD.motFixoMensal||0)/4.3;
+  else _motTD=(+_rotaTD?.motDiaPadrao||0)*selDias;
+  const mEl=document.getElementById('dias-mot'); if(mEl) mEl.textContent=R$(_motTD);
   // Update equipe dias fields
   document.querySelectorAll('[id^="eq-dias-"]').forEach(el=>el.value=selDias);
   prevSem();
@@ -1111,7 +1116,7 @@ function prevSem(){
     if(m.tipo==='fixo_mensal'){ custoMotPreview+=(+m.fixoMensal||0)/4.3; }
     else {
       const diasMem=_equipesDias[i]||[];
-      custoMotPreview+=(+m.diaria||0)*(diasMem.length>0?diasMem.length:selDias);
+      if(diasMem.length>0) custoMotPreview+=(+m.diaria||0)*diasMem.length; // R$0 se nenhum dia marcado
     }
   });
   // Show detailed breakdown per member
@@ -1140,10 +1145,14 @@ function prevSem(){
         detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (fixo)</span><span class="fw8 c-bl" style="font-size:12px">${R$(custo)}</span></div>`;
       } else {
         const diasMem=_equipesDias[i]||[];
-        const nDias=diasMem.length>0?diasMem.length:selDias;
-        custo=(+m.diaria||0)*nDias;
-        const diasNomes=diasMem.length>0?diasMem.map(d=>nomes[d]).join(','):'todos';
-        detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (${nDias}d: ${diasNomes})</span><span class="fw8 c-bl" style="font-size:12px">${R$(custo)}</span></div>`;
+        const nDias=diasMem.length;
+        if(nDias===0){
+          detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} <span style="color:var(--t2);font-size:10px">(marque os dias abaixo)</span></span><span class="fw8" style="font-size:12px;color:var(--t2)">R$ 0,00</span></div>`;
+        } else {
+          custo=(+m.diaria||0)*nDias;
+          const diasNomes=diasMem.map(d=>nomes[d]).join(',');
+          detalheHtml+=`<div class="crow"><span style="font-size:12px">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (${nDias}d: ${diasNomes})</span><span class="fw8 c-bl" style="font-size:12px">${R$(custo)}</span></div>`;
+        }
       }
       totalEq+=custo;
     });
@@ -1180,7 +1189,7 @@ function saveSem(){
         custoMotReal+=(+m.fixoMensal||0)/4.3+(isExtra?+m.sabExtra||0:0);
       } else {
         const diasMem=_equipesDias[i]||[];
-        const nDias=diasMem.length>0?diasMem.length:selDias;
+        const nDias=diasMem.length>0?diasMem.length:0; // 0 se nenhum dia marcado
         custoMotReal+=(+m.diaria||0)*nDias;
       }
     });
