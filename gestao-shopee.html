@@ -894,9 +894,11 @@ function modalSem(s){
         const _rm=(DB.cfg.rotas||[]).find(r=>r.nome===(s?.rotaId||(DB.cfg.rotas||[]).find(x=>!x.dataFim)?.nome));
         const _eq=_rm?.equipe||[];
         let _tot=0;
-        if(_eq.length>0){ _eq.forEach(m=>{ if(m.tipo==='fixo_mensal') _tot+=(+m.fixoMensal||0)/4.3; else _tot+=(+m.diaria||0)*selDias; }); }
-        else if(_rm?.motTipo==='fixo') _tot=(+_rm.motFixoMensal||0)/4.3;
-        else _tot=(+_rm?.motDiaPadrao||0)*selDias;
+        // Motorista principal
+        if(_rm?.motTipo==='fixo') _tot+=(+_rm.motFixoMensal||0)/4.3;
+        else if(_rm?.motDiaPadrao) _tot+=(+_rm.motDiaPadrao||0)*selDias;
+        // Equipe adicional (só fixo_mensal no header para simplificar)
+        _eq.forEach(m=>{ if(m.tipo==='fixo_mensal') _tot+=(+m.fixoMensal||0)/4.3; });
         return R$(_tot);
       })()}</span>
       </div>
@@ -1096,34 +1098,39 @@ function prevSem(){
   let custoMotPreview=0;
   const rotaPrev=getRotaSelecionada();
   const equipePrev=rotaPrev?.equipe||[];
-  if(equipePrev.length>0){
-    equipePrev.forEach((m,i)=>{
-      const el=document.getElementById('eq-ativo-'+i);
-      // Se o checkbox não existe ainda, trata como ativo por padrão
-      if(el&&!el.checked) return;
-      if(m.tipo==='fixo_mensal'){ custoMotPreview+=(+m.fixoMensal||0)/4.3; }
-      else {
-        const diasMem=_equipesDias[i]||[];
-        custoMotPreview+=(+m.diaria||0)*(diasMem.length>0?diasMem.length:selDias);
-      }
-    });
-  } else if(rotaPrev?.motTipo==='fixo'){
-    custoMotPreview=(+rotaPrev.motFixoMensal||0)/4.3;
-  } else if(rotaPrev?.motDiaPadrao){
-    custoMotPreview=(+rotaPrev.motDiaPadrao||0)*selDias;
+  // Sempre inclui motorista principal da rota (motTipo=fixo ou diaria)
+  if(rotaPrev?.motTipo==='fixo' && rotaPrev?.motFixoMensal){
+    custoMotPreview += (+rotaPrev.motFixoMensal||0)/4.3;
+  } else if(rotaPrev?.motTipo==='diaria' && rotaPrev?.motDiaPadrao){
+    custoMotPreview += (+rotaPrev.motDiaPadrao||0)*selDias;
   }
-  // If still 0, check if any equipe member is fixo_mensal even without checkboxes
-  if(custoMotPreview===0 && equipePrev.length>0){
-    equipePrev.forEach(m=>{
-      if(m.tipo==='fixo_mensal') custoMotPreview+=(+m.fixoMensal||0)/4.3;
-    });
-  }
+  // Soma equipe adicional (ajudantes, outros motoristas)
+  equipePrev.forEach((m,i)=>{
+    const el=document.getElementById('eq-ativo-'+i);
+    if(el&&!el.checked) return;
+    if(m.tipo==='fixo_mensal'){ custoMotPreview+=(+m.fixoMensal||0)/4.3; }
+    else {
+      const diasMem=_equipesDias[i]||[];
+      custoMotPreview+=(+m.diaria||0)*(diasMem.length>0?diasMem.length:selDias);
+    }
+  });
   // Show detailed breakdown per member
   const pvMotDetalhe=document.getElementById('pv-mot-detalhe');
   if(pvMotDetalhe && equipePrev.length>0){
     const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
     let detalheHtml='';
     let totalEq=0;
+    // Linha do motorista principal da rota
+    if(equipePrev.length>0 && rotaPrev?.motNome){
+      let custoMot=0;
+      if(rotaPrev.motTipo==='fixo') custoMot=(+rotaPrev.motFixoMensal||0)/4.3;
+      else custoMot=(+rotaPrev.motDiaPadrao||0)*selDias;
+      if(custoMot>0){
+        detalheHtml+=`<div class="crow"><span style="font-size:12px">🚗 ${rotaPrev.motNome} (motorista fixo)</span><span class="fw8 c-bl" style="font-size:12px">${R$(custoMot)}</span></div>`;
+        totalEq+=custoMot;
+      }
+    }
+    // Equipe adicional
     equipePrev.forEach((m,i)=>{
       const el=document.getElementById('eq-ativo-'+i);
       if(el&&!el.checked) return;
@@ -1140,10 +1147,6 @@ function prevSem(){
       }
       totalEq+=custo;
     });
-    // If still 0 (checkboxes not in DOM yet), use full equipe
-    if(totalEq===0){
-      equipePrev.forEach(m=>{ if(m.tipo==='fixo_mensal') totalEq+=(+m.fixoMensal||0)/4.3; });
-    }
     pvMotDetalhe.innerHTML=`<div class="crow"><span style="font-weight:700">👥 Custo equipe</span><span id="pv-mot" class="fw8 c-bl">${R$(totalEq)}</span></div>${detalheHtml}`;
     custoMotPreview=totalEq;
   } else {
