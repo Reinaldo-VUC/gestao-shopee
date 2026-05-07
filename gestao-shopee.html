@@ -1262,31 +1262,52 @@ window.editSem=id=>{
   },80);
 };
 window.updateSem=id=>{
-  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
-  const data=document.getElementById('ms-data')?.value, obs=document.getElementById('ms-obs')?.value||'';
+  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0;
+  const ped=pedDia*selDias;
+  const data=document.getElementById('ms-data')?.value;
+  const obs=document.getElementById('ms-obs')?.value||'';
   if(!tot){alert('Informe o valor total recebido.');return;}
   const rota=getRotaSelecionada();
-  const cx=calcSem(tot,selDias,ped,rota), idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0)return;
+  const cx=calcSem(tot,selDias,ped,rota);
+  const idx=DB.semanas.findIndex(x=>x.id===id); if(idx<0)return;
   const rotaId=rota?.nome||DB.semanas[idx].rotaId||'';
-  const diasSelEdit=[]; document.querySelectorAll('.day-btn').forEach((b,i)=>{if(b.classList.contains('on'))diasSelEdit.push(i);});
-  // Recalcular custo motorista
   const ma2=mAStr(data);
+  // Dias selecionados
+  const diasSelEdit=[];
+  document.querySelectorAll('.day-btn').forEach((b,i)=>{if(b.classList.contains('on'))diasSelEdit.push(i);});
+  // teveSabado
+  const teveSabadoUpd=_teveSabado||false;
+  // Custo motorista: inclui motorista principal + equipe
   let custoMotUpd=0;
+  if(rota?.motTipo==='fixo') custoMotUpd+=(+rota.motFixoMensal||0)/4.3;
+  else if(rota?.motDiaPadrao) custoMotUpd+=(+rota.motDiaPadrao||0)*selDias;
   const equipeUpd=rota?.equipe||[];
-  if(equipeUpd.length>0){
-    equipeUpd.forEach((m,i)=>{
-      const el=document.getElementById('eq-ativo-'+i);
-      if(el&&!el.checked) return;
-      if(m.tipo==='fixo_mensal'){ custoMotUpd+=(+m.fixoMensal||0)/4.3; }
-      else { const de=document.getElementById('eq-dias-'+i); custoMotUpd+=(+m.diaria||0)*(de?+de.value||selDias:selDias); }
-    });
-  } else if(rota?.motTipo==='fixo'){
-    custoMotUpd=(+rota.motFixoMensal||0)/4.3;
-  } else {
-    custoMotUpd=(+rota?.motDiaPadrao||0)*selDias;
-  }
-  const teveSabadoUpd=_teveSabado||DB.semanas[idx].teveSabado||false;
-  DB.semanas[idx]={...DB.semanas[idx],id,data,total:tot,dias:selDias,diasSelecionados:diasSelEdit,pedDia,rotaId,teveSabado:teveSabadoUpd,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotUpd||cx.custoMot,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia};
+  equipeUpd.forEach((m,i)=>{
+    const el=document.getElementById('eq-ativo-'+i);
+    if(el&&!el.checked) return;
+    if(m.tipo==='fixo_mensal'){
+      const sabsAnt=DB.semanas.filter(s=>mAStr(s.data)===ma2&&s.rotaId===rotaId&&s.teveSabado&&s.id!==id).length;
+      const isExtra=teveSabadoUpd&&sabsAnt>=(+m.sabInclusos||2);
+      custoMotUpd+=(+m.fixoMensal||0)/4.3+(isExtra?+m.sabExtra||0:0);
+    } else {
+      const diasMem=_equipesDias[i]||[];
+      if(diasMem.length>0) custoMotUpd+=(+m.diaria||0)*diasMem.length;
+    }
+  });
+  // equipeLog para histórico e restauração
+  const eqLogUpd=equipeUpd.map((m,i)=>{
+    const el=document.getElementById('eq-ativo-'+i);
+    if(el&&!el.checked) return null;
+    const dm=_equipesDias[i]||[];
+    return {nome:m.nome,funcao:m.funcao,tipo:m.tipo,diasSel:dm,nDias:dm.length>0?dm.length:selDias};
+  }).filter(Boolean);
+  _equipesDias={};
+  DB.semanas[idx]={...DB.semanas[idx],id,data,total:tot,dias:selDias,diasSelecionados:diasSelEdit,
+    pedDia,rotaId,teveSabado:teveSabadoUpd,pedShopee:cx.pedShopee,pedPago:cx.pedPago,
+    fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,
+    custoMot:custoMotUpd||cx.custoMot,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,
+    equipeLog:eqLogUpd};
   save(); closeModal(); render(); showToast('✅ Lançamento atualizado!');
 };
 
