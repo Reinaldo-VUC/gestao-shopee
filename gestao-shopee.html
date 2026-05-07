@@ -1223,15 +1223,43 @@ function saveSem(){
 }
 window.editSem=id=>{
   const s=DB.semanas.find(x=>x.id===id); if(!s)return;
-  // Set selDias from saved diasSelecionados
-  if(s.diasSelecionados && s.diasSelecionados.length>0){
-    selDias = s.diasSelecionados.length;
-  } else {
-    selDias = s.dias||5;
-  }
+  // Restaura selDias
+  if(s.diasSelecionados && s.diasSelecionados.length>0) selDias=s.diasSelecionados.length;
+  else selDias=s.dias||5;
+  // Restaura teveSabado
+  _teveSabado=s.teveSabado||false;
+  // Restaura dias de cada membro da equipe a partir do equipeLog
+  _equipesDias={};
+  const rota=(DB.cfg.rotas||[]).find(r=>r.nome===s.rotaId);
+  (rota?.equipe||[]).forEach((m,i)=>{
+    const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);
+    if(log?.diasSel && log.diasSel.length>0) _equipesDias[i]=log.diasSel;
+  });
   document.getElementById('mi').innerHTML=modalSem(s);
   document.getElementById('ov').classList.add('open');
-  setTimeout(()=>{ prevSem(); const ra2=(DB.cfg.rotas||[]).find(r=>r.nome===s.rotaId)||((DB.cfg.rotas||[]).find(r=>!r.dataFim)); refreshEquipeModal(ra2?.nome||''); },80);
+  setTimeout(()=>{
+    prevSem();
+    const ra2=(DB.cfg.rotas||[]).find(r=>r.nome===s.rotaId)||(DB.cfg.rotas||[]).find(r=>!r.dataFim);
+    refreshEquipeModal(ra2?.nome||'');
+    // After equipe renders, highlight saved days
+    setTimeout(()=>{
+      (rota?.equipe||[]).forEach((m,i)=>{
+        const diasSalvos=_equipesDias[i]||[];
+        diasSalvos.forEach(diaIdx=>{
+          const btn=document.getElementById('eq-dia-'+i+'-'+diaIdx);
+          if(btn){
+            btn.style.borderColor='var(--ac)';
+            btn.style.background='rgba(240,90,40,.15)';
+            btn.style.color='var(--ac)';
+          }
+        });
+        // Update resumo text
+        const nomes=['Seg','Ter','Qua','Qui','Sex','Sáb'];
+        const res=document.getElementById('eq-resumo-'+i);
+        if(res && diasSalvos.length>0) res.textContent=diasSalvos.length+'d: '+diasSalvos.map(d=>nomes[d]).join(', ');
+      });
+    },150);
+  },80);
 };
 window.updateSem=id=>{
   const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
