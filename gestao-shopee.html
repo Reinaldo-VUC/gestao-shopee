@@ -2914,69 +2914,86 @@ function calcDiasAjudante(membro, rotaId, periodoInicio, periodoFim){
   return {totalDias,totalVal,diasDetalhe};
 }
 
-// Calcula próximos pagamentos pendentes
+// Calcula todos os pagamentos (automáticos + manuais)
 function calcProximosPagamentos(){
   const now=new Date(), hoje=now.toISOString().split('T')[0];
   const pagtos=DB.cfg.pagamentos||[];
-  const pendentes=[];
   const rotas=DB.cfg.rotas||[];
+  const lista=[];
 
+  // ── Pagamentos automáticos por quinzena ─────────────────────
   rotas.forEach(rota=>{
-    if(rota.dataFim) return; // só rotas ativas
+    if(rota.dataFim) return;
 
-    // Motorista fixo
+    // Motorista fixo — gera Q1 e Q2 do mês atual
     if(rota.motTipo==='fixo'&&rota.motNome){
-      [
-        {dia:5,q:'Q1',label:'1ª quinzena (21→05)'},
-        {dia:20,q:'Q2',label:'2ª quinzena (06→20)'}
-      ].forEach(pgto=>{
-        const venc=new Date(now.getFullYear(),now.getMonth(),pgto.dia);
-        const vencStr=venc.toISOString().split('T')[0];
-        const mStr=String(venc.getMonth()+1).padStart(2,'0')+'/'+venc.getFullYear();
-        const jaFoi=pgto.dia<now.getDate()&&venc.getMonth()===now.getMonth();
+      [{dia:5,q:'Q1',label:'21→05 (1ª quinzena)'},{dia:20,q:'Q2',label:'06→20 (2ª quinzena)'}].forEach(pgto=>{
+        const mStr=String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
         const chave='mot_'+rota.nome+'_'+pgto.q+'_'+mStr;
-        const pago=pagtos.find(p=>p.chave===chave);
-        // Sábados extras da quinzena
-        const sabsQ=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&s.data>=vencStr).length;
+        // Verifica se já existe pagamento manual para este membro neste período
+        const pgManual=pagtos.find(p=>p.membro===rota.motNome&&p.tipo==='manual'&&
+          p.periodoFim&&p.periodoFim>=new Date(now.getFullYear(),now.getMonth(),pgto.dia===5?1:6).toISOString().split('T')[0]&&
+          p.periodoFim<=new Date(now.getFullYear(),now.getMonth(),pgto.dia).toISOString().split('T')[0]);
+        const pgAuto=pagtos.find(p=>p.chave===chave);
+        const pago=pgAuto||pgManual;
         const sabsTot=DB.semanas.filter(s=>s.rotaId===rota.nome&&s.teveSabado&&mAStr(s.data)===mStr).length;
         const sabExt=Math.max(0,sabsTot-(+rota.motSabInclusos||2));
         const valBase=pgto.q==='Q1'?+rota.motPag1Val||2000:+rota.motPag2Val||2000;
         const valExtra=pgto.q==='Q2'?sabExt*(+rota.motSabExtra||0):0;
-        pendentes.push({
-          chave,membro:rota.motNome,tipo:'motorista_fixo',rota:rota.nome,
+        const vencStr=new Date(now.getFullYear(),now.getMonth(),pgto.dia).toISOString().split('T')[0];
+        lista.push({chave,membro:rota.motNome,tipo:'motorista_fixo',rota:rota.nome,
           quinzena:pgto.label,vencimento:vencStr,valorBase:valBase,valorExtra:valExtra,
-          valor:valBase+valExtra,sabExtras:sabExt,status:pago?'pago':'pendente',
-          dataPago:pago?.dataPago,valorPago:pago?.valorPago,obs:pago?.obs,id:chave
-        });
+          valor:valBase+valExtra,sabExtras:sabExt,
+          status:pago?'pago':'pendente',dataPago:pago?.dataPago,
+          valorPago:pago?.valorPago,obs:pago?.obs});
       });
     }
 
     // Ajudantes/equipe diária
     (rota.equipe||[]).filter(m=>m.tipo==='diaria').forEach(m=>{
-      [
-        {dia:5,q:'Q1',pIni:new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0],pFim:new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0]},
-        {dia:20,q:'Q2',pIni:new Date(now.getFullYear(),now.getMonth(),6).toISOString().split('T')[0],pFim:new Date(now.getFullYear(),now.getMonth(),20).toISOString().split('T')[0]}
+      [{dia:5,q:'Q1',
+        pIni:new Date(now.getFullYear(),now.getMonth()-1,21).toISOString().split('T')[0],
+        pFim:new Date(now.getFullYear(),now.getMonth(),5).toISOString().split('T')[0]},
+       {dia:20,q:'Q2',
+        pIni:new Date(now.getFullYear(),now.getMonth(),6).toISOString().split('T')[0],
+        pFim:new Date(now.getFullYear(),now.getMonth(),20).toISOString().split('T')[0]}
       ].forEach(pgto=>{
         const mStr=String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
         const chave='adj_'+m.nome+'_'+pgto.q+'_'+mStr;
-        const pago=pagtos.find(p=>p.chave===chave);
+        const pgManual=pagtos.find(p=>p.membro===m.nome&&p.tipo==='manual'&&
+          p.periodoFim&&p.periodoFim>=pgto.pIni&&p.periodoFim<=pgto.pFim);
+        const pgAuto=pagtos.find(p=>p.chave===chave);
+        const pago=pgAuto||pgManual;
         const calc=calcDiasAjudante(m,rota.nome,pgto.pIni,pgto.pFim);
-        if(calc.totalDias>0||!pago){
-          pendentes.push({
-            chave,membro:m.nome,tipo:'ajudante_diaria',rota:rota.nome,
-            quinzena:'Período '+pgto.pIni+' a '+pgto.pFim,
-            periodoInicio:pgto.pIni,periodoFim:pgto.pFim,
-            vencimento:new Date(now.getFullYear(),now.getMonth(),pgto.dia).toISOString().split('T')[0],
-            valorBase:calc.totalVal,valor:calc.totalVal,
-            totalDias:calc.totalDias,diasDetalhe:calc.diasDetalhe,
-            status:pago?'pago':'pendente',dataPago:pago?.dataPago,
-            valorPago:pago?.valorPago,obs:pago?.obs,id:chave
-          });
-        }
+        lista.push({chave,membro:m.nome,tipo:'ajudante_diaria',rota:rota.nome,
+          quinzena:'Período: '+pgto.pIni.split('-').reverse().join('/')+' a '+pgto.pFim.split('-').reverse().join('/'),
+          periodoInicio:pgto.pIni,periodoFim:pgto.pFim,
+          vencimento:new Date(now.getFullYear(),now.getMonth(),pgto.dia).toISOString().split('T')[0],
+          valorBase:calc.totalVal,valor:pago?pago.valorPago:calc.totalVal,
+          totalDias:calc.totalDias,diasDetalhe:calc.diasDetalhe,
+          status:pago?'pago':'pendente',dataPago:pago?.dataPago,
+          valorPago:pago?.valorPago,obs:pago?.obs});
       });
     });
   });
-  return pendentes.sort((a,b)=>a.vencimento>b.vencimento?1:-1);
+
+  // ── Pagamentos manuais que não têm quinzena automática ────────
+  pagtos.filter(p=>p.tipo==='manual').forEach(p=>{
+    const jaExiste=lista.some(l=>l.dataPago===p.dataPago&&l.membro===p.membro&&l.status==='pago');
+    if(!jaExiste){
+      lista.push({chave:p.chave,membro:p.membro,tipo:'manual',rota:p.rota||'',
+        quinzena:'Manual: '+(p.periodoInicio?p.periodoInicio.split('-').reverse().join('/')+' a ':'')+
+          (p.periodoFim?p.periodoFim.split('-').reverse().join('/'):''),
+        vencimento:p.dataPago,valorBase:p.valorPago,valor:p.valorPago,
+        status:'pago',dataPago:p.dataPago,valorPago:p.valorPago,obs:p.obs});
+    }
+  });
+
+  return lista.sort((a,b)=>{
+    // Pendentes primeiro, depois por vencimento
+    if(a.status!==b.status) return a.status==='pendente'?-1:1;
+    return a.vencimento>b.vencimento?1:-1;
+  });
 }
 
 // Modal para registrar pagamento
