@@ -2425,11 +2425,35 @@ function calcFinanceiro(ma){
       if(!equipeDetalhe[m.nome]) equipeDetalhe[m.nome]={nome:m.nome,funcao:m.funcao,tipo:m.tipo,total:0};
     });
   });
-  // Soma custoMot dos lançamentos por membro (aproximado pelo total)
-  const custoEquipeTotal = sems.reduce((a,s)=>a+(+s.custoMot||0),0);
+  // Calcula custo Jeferson PELA CONFIG DA ROTA (ignora custoMot antigo)
+  let custoEquipeTotal = 0;
+  rotas.forEach(rota=>{
+    const semsRota=sems.filter(s=>s.rotaId===rota.nome);
+    if(!semsRota.length) return;
+    if(rota.motTipo==='fixo'&&rota.motFixoMensal){
+      const sabsN=semsRota.filter(s=>s.teveSabado).length;
+      const sabExt=Math.max(0,sabsN-(+rota.motSabInclusos||2));
+      custoEquipeTotal+=semsRota.length*(+rota.motFixoMensal/4.3)+sabExt*(+rota.motSabExtra||0);
+    }
+    (rota.equipe||[]).filter(m=>m.funcao!=='dono').forEach(m=>{
+      if(m.tipo==='fixo_mensal'){
+        const sabsN=semsRota.filter(s=>s.teveSabado).length;
+        const sabExt=Math.max(0,sabsN-(+m.sabInclusos||2));
+        custoEquipeTotal+=semsRota.length*(+m.fixoMensal/4.3)+sabExt*(+m.sabExtra||0);
+      } else {
+        semsRota.forEach(s=>{const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);if(log)custoEquipeTotal+=(+m.diaria||0)*(log.nDias||0);});
+      }
+    });
+  });
 
   // ── DESPESAS OPERACIONAIS ─────────────────────────────────────
-  const pedGastoTotal = sems.reduce((a,s)=>a+(+s.pedPago||0),0);
+  // Pedágio gasto: usa pedGastoTotal (novo campo) ou pedPago (campo antigo)
+  // Padrão R$25,10/dia se nenhum valor salvo
+  const pedGastoTotal = sems.reduce((a,s)=>{
+    if(+s.pedGastoTotal>0) return a+(+s.pedGastoTotal);
+    if(+s.pedPago>0) return a+(+s.pedPago);
+    return a+(25.10*(+s.dias||0)); // padrão R$25,10/dia
+  },0);
 
   // ── DESPESAS VARIÁVEIS por categoria ─────────────────────────
   const varCats={};
@@ -2725,10 +2749,12 @@ function renderFin(){
         f.rotas.forEach(rota=>{
           // Motorista principal (motNome + motFixoMensal)
           if(rota.motNome && rota.motTipo==='fixo' && rota.motFixoMensal){
-            const sabsN=f.sems.filter(s=>s.rotaId===rota.nome&&s.teveSabado).length;
+            const _sr=f.sems.filter(s=>s.rotaId===rota.nome);
+            if(!_sr.length) return; // pula rotas sem lançamentos neste mês
+            const sabsN=_sr.filter(s=>s.teveSabado).length;
             const sabExt=Math.max(0,sabsN-(+rota.motSabInclusos||2));
             const extVal=sabExt*(+rota.motSabExtra||0);
-            const total=f.sems.filter(s=>s.rotaId===rota.nome).length*(+rota.motFixoMensal/4.3)+extVal;
+            const total=_sr.length*(+rota.motFixoMensal/4.3)+extVal;
             equipeRows.push(`<div class="row"><span class="rl">🚗 ${rota.motNome} (motorista fixo${sabExt>0?' +'+sabExt+' sáb extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$(total)}</span></div>`);
           }
           // Equipe adicional - soma pelos lançamentos
@@ -2752,7 +2778,8 @@ function renderFin(){
             }
           });
         });
-        if(!equipeRows.length) return `<div class="row"><span class="rl">👥 Custo total equipe</span><span class="rv c-bl">${R$(f.custoEquipeTotal)}</span></div>`;
+        if(!equipeRows.length) return `<div class="row"><span class="rl">🚗 Jeferson (motorista fixo)</span><span class="rv c-bl">${R$(f.custoEquipeTotal)}</span></div>`;
+        // Recalculate total from rows to avoid double counting
         return equipeRows.join('')+`<div class="row" style="background:rgba(96,165,250,.05)"><span class="rl fw8">Subtotal equipe</span><span class="rv c-bl fw8">${R$(f.custoEquipeTotal)}</span></div>`;
       })()}
 
