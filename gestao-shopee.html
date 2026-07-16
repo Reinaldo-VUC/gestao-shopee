@@ -2408,10 +2408,13 @@ function calcFinanceiro(ma){
 
   // ── RECEITAS ──────────────────────────────────────────────────
   const recFixo    = sems.reduce((a,s)=>a+(+s.fixoTotal||0),0);
-  const recPedShop = sems.reduce((a,s)=>a+(+s.pedShopee||0),0);
+  const recPedShop = sems.reduce((a,s)=>a+(+s.pedShopeeTotal||+s.pedShopee||0),0);
   const recPacotes = sems.reduce((a,s)=>a+(+s.valPkts||0),0);
   const recSobPed  = sems.reduce((a,s)=>a+(+s.sobraPed||0),0);
   const recTotal   = sems.reduce((a,s)=>a+(+s.total||0),0);
+  const recSaida   = sems.reduce((a,s)=>{const r=(DB.cfg.rotas||[]).find(x=>x.nome===s.rotaId);return a+(+(r?.saidaDia||0))*(+s.dias||0);},0);
+  const recPontos  = sems.reduce((a,s)=>{const r=(DB.cfg.rotas||[]).find(x=>x.nome===s.rotaId);return a+(+(r?.pontosDia||0))*(+s.dias||0);},0);
+  const recIncent  = sems.reduce((a,s)=>{const r=(DB.cfg.rotas||[]).find(x=>x.nome===s.rotaId);return a+(+(r?.incentivoDia||0))*(+s.dias||0);},0);
   const totPkts    = sems.reduce((a,s)=>a+(+s.pkts||0),0);
   const totDias    = sems.reduce((a,s)=>a+(+s.dias||0),0);
 
