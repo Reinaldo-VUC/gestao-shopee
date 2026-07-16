@@ -469,20 +469,18 @@ function compute(ma){
   return {ma,semMes,varMes,recBruta,totPkts,totDias,custoMot,totalFixas,totalVar,totalDesp,lucro,custoPkt,semCont,proj};
 }
 function calcSem(total,dias,pedagio,rota){
-  // Usa SOMENTE valores da rota selecionada - nunca config global
-  const c=DB.cfg, d=+dias||0;
-  const fixoDia    = +(rota?.fixoDia)||0;
-  const pedDia     = +(rota?.pedagioShopee)||0;
-  const valPkt     = +c.valorPacote||0.5;
-  const fixoTotal  = fixoDia*d;
-  const pedShopee  = pedDia*d;
-  const pedPago    = +pedagio||0;
-  const valPkts    = Math.max(0,(+total||0)-fixoTotal-pedShopee);
-  const pkts       = valPkt>0?Math.round(valPkts/valPkt):0;
-  const sobraPed   = pedShopee-pedPago;
-  const custoMot   = 0;
-  const check      = Math.abs(fixoTotal+pedShopee+valPkts-(+total||0))<0.02;
-  return {fixoTotal,pedShopee,pedPago,valPkts,pkts,sobraPed,custoMot,check,fixoDia,pedShopeeDia:pedDia};
+  // Estrutura real Shopee: Total=Saida+Pontos+Incentivo+PedShopee+Pkts*0.50
+  const c=DB.cfg,d=+dias||0,valPkt=+c.valorPacote||0.5;
+  const saidaDia=+(rota?.saidaDia)||0,pontosDia=+(rota?.pontosDia)||0,
+        incentDia=+(rota?.incentivoDia)||0,pedShopeeDia=+(rota?.pedagioShopee)||0;
+  const fixoDia=saidaDia+pontosDia+incentDia;
+  const fixoTotal=fixoDia*d,pedShopee=pedShopeeDia*d;
+  const valPkts=Math.max(0,(+total||0)-fixoTotal-pedShopee);
+  const pkts=valPkt>0?Math.round(valPkts/valPkt):0;
+  const pedPago=+pedagio||0,sobraPed=pedShopee-pedPago;
+  const check=Math.abs(fixoTotal+pedShopee+valPkts-(+total||0))<0.10;
+  return {fixoTotal,pedShopee,pedPago,valPkts,pkts,sobraPed,custoMot:0,check,
+          fixoDia,pedShopeeDia,saidaDia,pontosDia,incentivoDia:incentDia};
 }
 
 // ═══════════ ALERTS ═══════════════════════════════════════════════
@@ -774,7 +772,7 @@ function renderDesp(){
     ${keys.length===0?empty('Nenhuma despesa variável lançada.'):keys.map(ma=>{
       const vars=grp[ma],tot=vars.reduce((a,v)=>a+(+v.valor||0),0);
       return `<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><span class="fw8 ff" style="font-size:15px">${mALbl(ma)}</span><span class="fw8 c-rd" style="font-size:15px">${R$(tot)}</span></div>
-        ${vars.map(v=>`<div class="item"><div style="flex:1"><div class="itx">${CATS[v.cat]||'📌'} ${v.cat}</div><div class="isb">${v.data}${v.obs?' · '+v.obs:''}</div></div><div style="display:flex;align-items:center;gap:8px;margin-left:8px"><span class="fw8 c-rd">${R$(v.valor)}</span><button class="del" onclick="delVar('${v.id}')">🗑</button></div></div>`).join('')}
+        ${vars.map(v=>`<div class="item"><div style="flex:1"><div class="itx">${CATS[v.cat]||'📌'} ${v.cat}</div><div class="isb">${v.data}${v.obs?' · '+v.obs:''}</div></div><div style="display:flex;align-items:center;gap:5px;margin-left:8px"><span class="fw8 c-rd">${R$(v.valor)}</span><button onclick="editVar('${v.id}')" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--bl);padding:2px">✏️</button><button class="del" onclick="delVar('${v.id}')">🗑</button></div></div>`).join('')}
       </div>`;
     }).join('')}`;
 }
@@ -842,6 +840,11 @@ function renderCfg(){
     <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:16px">
       <span style="font-size:13px;color:var(--t2)">Tema:</span>
       <button class="btn bsm bgh" onclick="toggleTheme()">${DB.cfg.tema==='dark'?'☀️ Claro':'🌙 Escuro'}</button>
+    </div>
+    <div class="card" style="border-left:3px solid var(--yw);margin-top:12px">
+      <div class="ct">🔄 Recalcular Lançamentos</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Recalcula pacotes com a fórmula real da Shopee. Não altera os valores recebidos.</div>
+      ${(DB.cfg.rotas||[]).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:700">${r.icone||'🗺️'} ${r.nome}</div><div style="font-size:11px;color:var(--t2)">Fixo: ${R$((+r.saidaDia||140.25)+(+r.pontosDia||35)+(+r.incentivoDia||200))}/dia · Ped: ${R$(+r.pedagioShopee||44.40)}/dia</div></div><button onclick="recalcularLancamentos('${r.nome}')" class="btn bsm" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:var(--yw)">🔄 Recalcular</button></div>`).join('')}
     </div>
     <div class="nfe-box"><div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:8px">📄 Portais NF-e</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="https://nfe.jundiai.sp.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#fff;background:var(--ac)">🏢 NFS-e Jundiaí ↗</a><a href="https://www.nfe.fazenda.gov.br" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:var(--tx);background:var(--s2)">🌐 Portal Federal ↗</a></div></div>`;
 }
@@ -915,7 +918,7 @@ function refreshExtras(){ const el=document.getElementById('extras-list'); if(!e
 
 // ═══════════ MODAL SEMANA ═════════════════════════════════════════
 let selDias=5;
-window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem'){
+window.openModal=(t,extra)=>{ const mi=document.getElementById('mi'); selDias=0; _teveSabado=false; _equipesDias={}; _calDatas=[]; _calDatasOn=null; _donoFoi=false; _donoDiasSel=[]; _modalRotaIdx=extra!==undefined?extra:null; if(t==='sem'){
   mi.innerHTML=modalSem();
   (function tryEq(n){ 
     const el=document.getElementById('ms-equipe-container');
@@ -943,9 +946,14 @@ function modalSem(s){
         ${(DB.cfg.rotas||[]).filter(r=>!r.dataFim).map(r=>`<option value="${r.nome}" ${(s?.rotaId||(DB.cfg.rotas||[]).find(x=>!x.dataFim)?.nome)===r.nome?'selected':''}>${r.icone||'🗺️'} ${r.nome}</option>`).join('')}
       </select>
     </div>`:''}
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Período — início</label><input class="inp" type="date" id="ms-per-ini" oninput="buildCalendar()"></div>
+      <div class="fld"><label class="lbl">Período — fim</label><input class="inp" type="date" id="ms-per-fim" oninput="buildCalendar()"></div>
+    </div>
     <div class="fld">
-      <label class="lbl">Dias trabalhados nesta semana</label>
-      <div class="days-pick">${dias.map((d,i)=>{
+      <label class="lbl">Dias trabalhados</label>
+      <div id="ms-calendar" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;min-height:38px"></div>
+      <div style="display:none"><div class="days-pick">${dias.map((d,i)=>{
         let on = false;
         if(isEdit && s.diasSelecionados && s.diasSelecionados.length>0){
           on = s.diasSelecionados.includes(i);
@@ -969,7 +977,11 @@ function modalSem(s){
       })()}</span>
       </div>
     </div>
-    <div class="fld"><label class="lbl">Pedágio gasto por dia (R$)</label><input class="inp" type="number" id="ms-ped-dia" value="${pedDia}" oninput="prevSem()"><div style="font-size:11px;color:var(--t2);margin-top:5px">Total = valor/dia × dias trabalhados ✓</div></div>
+    <div class="inp-row">
+      <div class="fld"><label class="lbl">Pedágio gasto total semana (R$)</label><input class="inp" type="number" id="ms-ped-gasto" value="${s?((+s.pedDia||0)*(s.dias||selDias)).toFixed(2):''}" placeholder="Ex: 156.00" oninput="prevSem()"></div>
+      <div class="fld"><label class="lbl">Pedágio Shopee reembolsou (R$)</label><input class="inp" type="number" id="ms-ped-shopee" value="${s?.pedShopeeTotal||(_rotaM?(+(_rotaM.pedagioShopee||0)*selDias).toFixed(2):0)}" placeholder="Auto" oninput="prevSem()"></div>
+    </div>
+    <div style="display:none"><input type="number" id="ms-ped-dia" value="${pedDia}"></div>
     <div class="fld"><label class="lbl">Valor total recebido da Shopee (R$)</label><input class="inp" type="number" id="ms-tot" value="${s?s.total:''}" placeholder="Copie do app da Shopee" style="font-size:18px;font-weight:700" oninput="prevSem()"></div>
     <div id="ms-prev" style="display:none">
       <div class="cbox">
@@ -1013,6 +1025,24 @@ function modalSem(s){
       }
       return '';
     })()}
+    <div class="fld" style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <label class="lbl" style="margin:0">📍 Ponto extra esta semana?</label>
+        <button onclick="togExtraPonto()" id="btn-extra" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:6px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:var(--bl);cursor:pointer">+ Adicionar</button>
+      </div>
+      <div id="extra-ponto-form" style="display:none;margin-top:10px">
+        <div class="inp-row">
+          <div class="fld"><label class="lbl">Data</label><input class="inp" type="date" id="ep-data"></div>
+          <div class="fld"><label class="lbl">Saída R$</label><input class="inp" type="number" id="ep-saida" placeholder="140.25"></div>
+        </div>
+        <div class="inp-row">
+          <div class="fld"><label class="lbl">Pacotes R$</label><input class="inp" type="number" id="ep-pkts" placeholder="477.00"></div>
+          <div class="fld"><label class="lbl">Pedágio R$</label><input class="inp" type="number" id="ep-ped" placeholder="44.40"></div>
+        </div>
+        <div style="font-size:11px;color:var(--bl);margin-top:4px">Já incluído no total — só para registro</div>
+      </div>
+    </div>
+    ${(()=>{const rm=(DB.cfg.rotas||[]).find(r=>!r.dataFim);const dm=(rm?.equipe||[]).find(m=>m.funcao==='dono');if(!dm)return '';return '<div class="fld" style="background:rgba(240,90,40,.07);border:1px solid rgba(240,90,40,.2);border-radius:10px;padding:12px"><label class="lbl">👑 '+dm.nome+' foi a campo?</label><div style="display:flex;gap:10px;margin-top:8px"><button onclick="togDono(false)" id="dono-nao" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:12px;font-weight:700">Não foi</button><button onclick="togDono(true)" id="dono-sim" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--ac);background:rgba(240,90,40,.1);color:var(--ac);cursor:pointer;font-size:12px;font-weight:700">✓ Sim</button></div><div id="dono-dias-sel" style="display:none;margin-top:8px"><div style="font-size:11px;color:var(--t2);margin-bottom:6px">Quais dias?</div><div id="dono-dias-btns" style="display:flex;gap:4px;flex-wrap:wrap"></div></div></div>';})()}
     <div id="ms-equipe-container"></div>
     <div class="fld"><label class="lbl">Observações</label><input class="inp" id="ms-obs" value="${s?s.obs||'':''}"
 " placeholder="Opcional"></div>
@@ -1150,7 +1180,11 @@ function togDay(i){
   prevSem();
 }
 function prevSem(){
-  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
+  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const pedGasto=parseFloat(document.getElementById('ms-ped-gasto')?.value)||0;
+  const pedShopeeDisp=parseFloat(document.getElementById('ms-ped-shopee')?.value)||0;
+  const pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||pedGasto/Math.max(selDias,1);
+  const ped=pedGasto||pedDia*selDias;
   const pv=document.getElementById('ms-prev'); if(!pv)return;
   if(tot<=0){pv.style.display='none';return;}
   pv.style.display='block';
@@ -1162,7 +1196,9 @@ function prevSem(){
   document.getElementById('pv-fixo').textContent='− '+R$(cx.fixoTotal);
     const rotaDisp=getRotaSelecionada();
   document.getElementById('pv-ped').textContent='− '+R$(cx.pedShopee)+' (Shopee: '+selDias+'d × '+R$(rotaDisp?.pedagioShopee||0)+')';
-  document.getElementById('pv-ped-gasto').textContent=R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
+  const pgEl=document.getElementById('pv-ped-gasto');if(pgEl)pgEl.textContent=R$(cx.pedPago)+' ('+selDias+'d × '+R$(pedDia)+')';
+  const psEl=document.getElementById('pv-ped-shop');if(psEl)psEl.textContent=R$(pedShopeeDisp||cx.pedShopee);
+  const pgvEl=document.getElementById('pv-ped-gasto-val');if(pgvEl)pgvEl.textContent=R$(pedGasto);
   document.getElementById('pv-vpkt').textContent=R$(cx.valPkts);
   document.getElementById('pv-pkts').textContent=cx.pkts.toLocaleString('pt-BR')+' pacotes';
   document.getElementById('pv-sob').textContent=R$(cx.sobraPed);
@@ -1235,8 +1271,17 @@ function prevSem(){
   chk.style.cssText=`margin-top:10px;font-size:12px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:${cx.check?'rgba(52,211,153,.1)':'rgba(244,63,94,.1)'};color:${cx.check?'var(--gn)':'var(--rd)'}`;
 }
 function saveSem(){
-  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0, pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||0, ped=pedDia*selDias;
-  const data=document.getElementById('ms-data')?.value, obs=document.getElementById('ms-obs')?.value||'';
+  const tot=parseFloat(document.getElementById('ms-tot')?.value)||0;
+  const pedGastoTotal=parseFloat(document.getElementById('ms-ped-gasto')?.value)||0;
+  const pedShopeeTotal=parseFloat(document.getElementById('ms-ped-shopee')?.value)||0;
+  const pedDia=parseFloat(document.getElementById('ms-ped-dia')?.value)||pedGastoTotal/Math.max(selDias,1);
+  const ped=pedGastoTotal||pedDia*selDias;
+  const periodoIni=document.getElementById('ms-per-ini')?.value||today();
+  const periodoFim=document.getElementById('ms-per-fim')?.value||today();
+  const data=document.getElementById('ms-data')?.value||periodoFim;
+  const obs=document.getElementById('ms-obs')?.value||'';
+  const epForm=document.getElementById('extra-ponto-form');
+  const extraPonto=(epForm&&epForm.style.display!=='none')?{data:document.getElementById('ep-data')?.value||'',saida:+document.getElementById('ep-saida')?.value||0,pkts:+document.getElementById('ep-pkts')?.value||0,pedagio:+document.getElementById('ep-ped')?.value||0}:null;
   if(!tot){alert('Informe o valor total recebido.');return;}
   if(selDias===0){alert('Selecione ao menos um dia trabalhado.');return;}
   const rota=getRotaSelecionada();
@@ -1285,7 +1330,9 @@ function saveSem(){
     return {nome:m.nome,funcao:m.funcao,diasSel:dm,nDias:dm.length>0?dm.length:selDias};
   }).filter(Boolean);
   _equipesDias={};
-  DB.semanas.push({id:uid(),data,total:tot+ganhoExtra,totalShopee:tot,ganhoExtra,dias:selDias,diasSelecionados:diasSel,pedDia,rotaId,teveSabado,equipeLog:eqLog,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotReal_final||custoMotReal,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:0});
+  const donoLog=_donoFoi?{foi:true,dias:_donoDiasSel.slice()}:null;_donoFoi=false;_donoDiasSel=[];
+  const datasCalendario=_calDatas.filter(x=>x.on).map(x=>x.data);
+  DB.semanas.push({id:uid(),data,periodoIni,periodoFim,datasCalendario,total:tot+ganhoExtra,totalShopee:tot,ganhoExtra,dias:selDias,diasSelecionados:diasSel,pedDia,pedGastoTotal,pedShopeeTotal,rotaId,teveSabado,equipeLog:eqLog,donoLog,extraPonto,pedShopee:cx.pedShopee,pedPago:cx.pedPago,fixoTotal:cx.fixoTotal,valPkts:cx.valPkts,pkts:cx.pkts,sobraPed:cx.sobraPed,custoMot:custoMotReal_final||custoMotReal,obs,fixoDia:cx.fixoDia,pedShopeeDia:cx.pedShopeeDia,motDia:0});
   _teveSabado=false;
   save(); closeModal(); render();
 }
@@ -1306,6 +1353,11 @@ window.editSem=id=>{
   document.getElementById('mi').innerHTML=modalSem(s);
   document.getElementById('ov').classList.add('open');
   setTimeout(()=>{
+    const iniEl=document.getElementById('ms-per-ini'),fimEl=document.getElementById('ms-per-fim');
+    if(iniEl)iniEl.value=s.periodoIni||s.data||today();
+    if(fimEl)fimEl.value=s.periodoFim||s.data||today();
+    if(s.datasCalendario&&s.datasCalendario.length>0)_calDatasOn=s.datasCalendario;
+    buildCalendar();_calDatasOn=null;
     prevSem();
     const ra2=(DB.cfg.rotas||[]).find(r=>r.nome===s.rotaId)||(DB.cfg.rotas||[]).find(r=>!r.dataFim);
     refreshEquipeModal(ra2?.nome||'');
@@ -2186,8 +2238,11 @@ window.saveRota = function(idx){
     dataInicio: document.getElementById('rt-inicio')?.value||'',
     dataFim:    document.getElementById('rt-fim')?.value||'',
     motNome:       document.getElementById('rt-mot-nome')?.value||'',
-    fixoDia:       +document.getElementById('rt-fixo')?.value||0,
-    pedagioShopee: +document.getElementById('rt-ped')?.value||0,
+    saidaDia:      +document.getElementById('rt-saida')?.value||140.25,
+    pontosDia:     +document.getElementById('rt-pontos')?.value||35,
+    incentivoDia:  +document.getElementById('rt-incentivo')?.value||200,
+    pedagioShopee: +document.getElementById('rt-ped')?.value||44.40,
+    fixoDia:(+document.getElementById('rt-saida')?.value||140.25)+(+document.getElementById('rt-pontos')?.value||35)+(+document.getElementById('rt-incentivo')?.value||200),
     motTipo:       document.getElementById('rt-mot-tipo')?.value||'diaria',
     motDiaPadrao:  +document.getElementById('rt-mot')?.value||0,
     motFixoMensal: +document.getElementById('rt-mot-fixo-val')?.value||0,
@@ -2402,7 +2457,7 @@ function calcFinanceiro(ma){
   const despAnt  = despAntEq+despAntPed+despAntVar+fixaMensal;
   const lucroAnt = recAnt - despAnt;
 
-  return {recFixo,recPedShop,recPacotes,recSobPed,recTotal,totPkts,totDias,
+  return {recFixo,recPedShop,recPacotes,recSobPed,recTotal,recSaida,recPontos,recIncent,totPkts,totDias,
           custoEquipeTotal,pedGastoTotal,varCats,varTotal,fixaMensal,
           despTotal,lucro,margem,sems,vars,rotas,
           maAnt,recAnt,lucroAnt,equipeDetalhe};
@@ -2640,8 +2695,10 @@ function renderFin(){
     <!-- Receitas detalhadas -->
     <div class="card">
       <div class="ct">💰 Receitas Detalhadas — ${mALbl(finMes)}</div>
-      <div class="row"><span class="rl">🏁 Fixo de saída (${f.totDias}d)</span><span class="rv c-gn">${R$(f.recFixo)}</span></div>
-      <div class="row"><span class="rl">🛣️ Pedágio pago pela Shopee (${f.totDias}d)</span><span class="rv c-gn">${R$(f.recPedShop)}</span></div>
+      <div class="row"><span class="rl">🛣️ Saída/km (${f.totDias}d × R$140,25)</span><span class="rv c-gn">${R$(f.recSaida||0)}</span></div>
+      <div class="row"><span class="rl">📍 Pontos parada (${f.totDias}d × R$35)</span><span class="rv c-gn">${R$(f.recPontos||0)}</span></div>
+      <div class="row"><span class="rl">💪 Incentivo ajudante (${f.totDias}d × R$200)</span><span class="rv c-gn">${R$(f.recIncent||0)}</span></div>
+      <div class="row"><span class="rl">🛣️ Pedágio reembolsado Shopee</span><span class="rv c-gn">${R$(f.recPedShop)}</span></div>
       <div class="row"><span class="rl">📦 Pacotes (${f.totPkts.toLocaleString('pt-BR')} un × R$0,50)</span><span class="rv c-gn">${R$(f.recPacotes)}</span></div>
       ${f.recSobPed>0?`<div class="row" style="opacity:.65"><span class="rl" style="font-size:11px">💛 Sobra de pedágio <span style="color:var(--t2)">(já inclusa acima — bônus pois você gastou menos que o pago)</span></span><span class="rv" style="font-size:11px;color:var(--t2)">${R$(f.recSobPed)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;padding:10px 0;margin-top:4px;border-top:1px solid var(--bd)">
@@ -3277,6 +3334,109 @@ function calcEquipeStatus(rota){
   });
   return result;
 }
+
+let _calDatas=[],_calDatasOn=null,_donoFoi=false,_donoDiasSel=[];
+window.buildCalendar=function(){
+  const ini=document.getElementById('ms-per-ini')?.value,fim=document.getElementById('ms-per-fim')?.value;
+  if(!ini||!fim)return;
+  const cal=document.getElementById('ms-calendar');if(!cal)return;
+  const d1=new Date(ini+'T12:00:00'),d2=new Date(fim+'T12:00:00');
+  if(d2<d1){cal.innerHTML='<span style="color:var(--rd);font-size:11px">Data fim deve ser após início</span>';return;}
+  const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const frags=[];selDias=0;_calDatas=[];
+  const cur=new Date(d1);
+  while(cur<=d2){
+    const dow=cur.getDay();
+    if(dow!==0){
+      const ds=cur.toISOString().split('T')[0];
+      const lbl=dn[dow]+' '+String(cur.getDate()).padStart(2,'0');
+      const isOn=_calDatasOn?_calDatasOn.includes(ds):(dow!==6);
+      if(isOn)selDias++;
+      _calDatas.push({data:ds,dow,on:isOn});
+      const btn=document.createElement('button');
+      btn.type='button';btn.id='cal-'+ds;btn.dataset.ds=ds;btn.textContent=lbl;
+      btn.onclick=function(){togCalDia(this.dataset.ds);};
+      btn.style.cssText='padding:5px 8px;border-radius:8px;border:1.5px solid '+(isOn?'var(--ac)':'var(--bd)')+';background:'+(isOn?'rgba(240,90,40,.12)':'var(--s2)')+';color:'+(isOn?'var(--ac)':'var(--t2)')+';cursor:pointer;font-size:11px;font-weight:700';
+      frags.push(btn);
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  cal.innerHTML='';frags.forEach(b=>cal.appendChild(b));
+  _updateDiasCount();prevSem();
+};
+window.togCalDia=function(ds){
+  const btn=document.getElementById('cal-'+ds);if(!btn)return;
+  const e=_calDatas.find(x=>x.data===ds);if(!e)return;
+  e.on=!e.on;
+  btn.style.borderColor=e.on?'var(--ac)':'var(--bd)';
+  btn.style.background=e.on?'rgba(240,90,40,.12)':'var(--s2)';
+  btn.style.color=e.on?'var(--ac)':'var(--t2)';
+  selDias=_calDatas.filter(x=>x.on).length;
+  if(e.dow===6)_teveSabado=e.on;
+  _updateDiasCount();prevSem();
+};
+function _updateDiasCount(){
+  const rota=getRotaSelecionada();
+  const dEl=document.getElementById('dias-count');if(dEl)dEl.textContent=selDias+' dia'+(selDias!==1?'s':'');
+  const f=(+(rota?.saidaDia||0))+(+(rota?.pontosDia||0))+(+(rota?.incentivoDia||0));
+  const fEl=document.getElementById('dias-fixo');if(fEl)fEl.textContent=R$(f*selDias);
+  const pEl=document.getElementById('ms-ped-shopee');if(pEl&&!pEl._edited)pEl.value=((+(rota?.pedagioShopee||0))*selDias).toFixed(2);
+  const mEl=document.getElementById('dias-mot');if(mEl){const m=rota?.motTipo==='fixo'?(+rota.motFixoMensal||0)/4.3:(+rota?.motDiaPadrao||0)*selDias;mEl.textContent=R$(m);}
+}
+window.togExtraPonto=function(){
+  const f=document.getElementById('extra-ponto-form'),b=document.getElementById('btn-extra');
+  if(!f)return;const show=f.style.display==='none';
+  f.style.display=show?'block':'none';if(b)b.textContent=show?'− Remover':'+ Adicionar';
+};
+window.togDono=function(val){
+  _donoFoi=val;
+  const bn=document.getElementById('dono-nao'),bs=document.getElementById('dono-sim'),dd=document.getElementById('dono-dias-sel');
+  if(bn){bn.style.borderColor=val?'var(--bd)':'var(--ac)';bn.style.color=val?'var(--t2)':'var(--ac)';bn.style.background=val?'var(--s2)':'rgba(240,90,40,.1)';}
+  if(bs){bs.style.borderColor=val?'var(--ac)':'var(--bd)';bs.style.color=val?'var(--ac)':'var(--t2)';bs.style.background=val?'rgba(240,90,40,.1)':'var(--s2)';}
+  if(dd){dd.style.display=val?'block':'none';if(val){const btns=document.getElementById('dono-dias-btns');if(btns&&!btns.innerHTML){const d2=['Seg','Ter','Qua','Qui','Sex','Sáb'];btns.innerHTML=d2.map((d,i)=>'<button type="button" onclick="togDonoDia('+i+')" id="dd-'+i+'" style="padding:4px 8px;border-radius:6px;border:1.5px solid '+(i===0?'var(--ac)':'var(--bd)')+';background:'+(i===0?'rgba(240,90,40,.1)':'var(--s2)')+';color:'+(i===0?'var(--ac)':'var(--t2)')+';cursor:pointer;font-size:11px;font-weight:700">'+d+'</button>').join('');_donoDiasSel=[0];}}}
+};
+window.togDonoDia=function(i){
+  const btn=document.getElementById('dd-'+i);if(!btn)return;
+  const on=_donoDiasSel.includes(i);
+  if(on)_donoDiasSel=_donoDiasSel.filter(x=>x!==i);else _donoDiasSel.push(i);
+  btn.style.borderColor=!on?'var(--ac)':'var(--bd)';
+  btn.style.background=!on?'rgba(240,90,40,.1)':'var(--s2)';
+  btn.style.color=!on?'var(--ac)':'var(--t2)';
+};
+window.editVar=function(id){
+  const v=DB.variaveis.find(x=>x.id===id);if(!v)return;
+  const mi=document.getElementById('mi');
+  const html='<div class="mh"><span class="mt">✏️ Editar Despesa</span><button class="mc" onclick="closeModal()">×</button></div>'
+    +'<div class="fld"><label class="lbl">Categoria</label><select class="inp" id="ev-cat">'+Object.keys(CATS).map(k=>'<option value="'+k+'"'+(v.cat===k?' selected':'')+'>'+CATS[k]+' '+k+'</option>').join('')+'</select></div>'
+    +'<div class="inp-row"><div class="fld"><label class="lbl">Data</label><input class="inp" type="date" id="ev-data" value="'+v.data+'"></div><div class="fld"><label class="lbl">Valor (R$)</label><input class="inp" type="number" id="ev-valor" value="'+v.valor+'"></div></div>'
+    +'<div class="fld"><label class="lbl">Observação</label><input class="inp" id="ev-obs" value="'+(v.obs||'')+'"></div>'
+    +'<button class="btn" id="ev-btn-save">💾 Salvar</button>';
+  mi.innerHTML=html;
+  document.getElementById('ev-btn-save').onclick=()=>saveEditVar(id);
+  document.getElementById('ov').classList.add('open');
+};
+window.saveEditVar=function(id){
+  const v=DB.variaveis.find(x=>x.id===id);if(!v)return;
+  const cat=document.getElementById('ev-cat')?.value,data=document.getElementById('ev-data')?.value,
+        valor=+document.getElementById('ev-valor')?.value||0,obs=document.getElementById('ev-obs')?.value||'';
+  if(cat)v.cat=cat;if(data)v.data=data;if(valor)v.valor=valor;v.obs=obs;
+  save();closeModal();render();showToast('✅ Despesa atualizada!');
+};
+window.recalcularLancamentos=function(rotaNome){
+  const rota=(DB.cfg.rotas||[]).find(r=>r.nome===rotaNome);
+  if(!rota){alert('Rota não encontrada: '+rotaNome);return;}
+  if(!confirm('Recalcular pacotes de "'+rotaNome+'"?\nValores recebidos NÃO serão alterados.'))return;
+  let count=0;
+  DB.semanas.filter(s=>s.rotaId===rotaNome).forEach(s=>{
+    const dias=s.dias||0;if(!dias)return;
+    const ped=s.pedGastoTotal||((s.pedDia||0)*dias);
+    const cx=calcSem(s.totalShopee||s.total,dias,ped,rota);
+    s.fixoTotal=cx.fixoTotal;s.pedShopee=cx.pedShopee;
+    s.valPkts=cx.valPkts;s.pkts=cx.pkts;s.sobraPed=cx.sobraPed;
+    s.fixoDia=cx.fixoDia;s.pedShopeeDia=cx.pedShopeeDia;count++;
+  });
+  save();render();showToast('✅ '+count+' lançamentos recalculados!');
+};
 function showToast(msg){
   const t=document.createElement('div');
   t.textContent=msg;
