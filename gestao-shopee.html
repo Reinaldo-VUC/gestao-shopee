@@ -613,6 +613,93 @@ function computeRota(rotaNome, ma){
   const semCont   = sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
   return {recBruta,totPkts,totDias,custoMot,totalFixas,totalFixasBase,totalVar,totalDesp,lucro,semCont,proj,sems,rotaNome};
 }
+
+// ═══════════ PAINEL — SCORE, PROJEÇÃO TEMPO REAL, INSIGHTS ════════
+function semanasRota(rotaNome){
+  const rotas=DB.cfg.rotas||[];
+  return DB.semanas.filter(s=>rotaNome==='geral'||s.rotaId===rotaNome||(!s.rotaId&&rotaNome===rotas[0]?.nome))
+    .slice().sort((a,b)=>new Date(a.data+'T12:00:00')-new Date(b.data+'T12:00:00'));
+}
+function computeScoreSemana(rotaNome){
+  const all=semanasRota(rotaNome);
+  if(all.length<2) return null;
+  const ultima=all[all.length-1];
+  const hist=all.slice(Math.max(0,all.length-7),all.length-1);
+  if(!hist.length) return null;
+  const diaVal=s=>(+s.total||0)/Math.max(1,+s.dias||1);
+  const mediaDia=hist.reduce((a,s)=>a+diaVal(s),0)/hist.length;
+  const ultimaDia=diaVal(ultima);
+  const pct=mediaDia>0?(ultimaDia/mediaDia)*100:100;
+  let icon,cor,label;
+  if(pct>=115){icon='🔥';cor='var(--gn)';label='Semana ótima';}
+  else if(pct>=95){icon='✅';cor='var(--gn)';label='Semana boa';}
+  else if(pct>=80){icon='⚠️';cor='var(--yw)';label='Abaixo da média';}
+  else {icon='🔴';cor='var(--rd)';label='Semana fraca';}
+  const diffTotal=(ultimaDia-mediaDia)*(+ultima.dias||0);
+  return {ultima,mediaDia,ultimaDia,pct:Math.round(pct),icon,cor,label,diffTotal,histCount:hist.length};
+}
+function mediaHistoricaDiaria(rotaNome){
+  const now=new Date();
+  const vals=[];
+  for(let i=1;i<=3;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const ma=String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    const diasNoMes=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+    const cx=computeRota(rotaNome,ma);
+    if(cx.recBruta>0) vals.push(cx.recBruta/diasNoMes);
+  }
+  return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+}
+function computeProjecaoRealtime(rotaNome,ma){
+  ma=ma||curMA();
+  const cx=computeRota(rotaNome,ma);
+  const[mes,ano]=ma.split('/');
+  const diasNoMes=new Date(+ano,+mes,0).getDate();
+  const hoje=new Date();
+  const ehMesAtual=ma===curMA();
+  const diasDecorridos=Math.max(1,ehMesAtual?Math.min(hoje.getDate(),diasNoMes):diasNoMes);
+  const projRealtime=cx.recBruta>0?(cx.recBruta/diasDecorridos)*diasNoMes:0;
+  const pctTempo=Math.round((diasDecorridos/diasNoMes)*100);
+  const ritmoAtual=cx.recBruta/diasDecorridos;
+  const mediaHist=mediaHistoricaDiaria(rotaNome);
+  let paceMsg;
+  if(mediaHist>0){
+    const pctRitmo=Math.round((ritmoAtual/mediaHist)*100);
+    paceMsg=pctRitmo>=108?`🔥 Ritmo ${pctRitmo-100}% acima do normal`:pctRitmo<=92?`⚠️ Ritmo ${100-pctRitmo}% abaixo do normal`:`✅ Ritmo dentro do normal`;
+  } else {
+    paceMsg=cx.semCont>0?`Média ${R$(cx.recBruta/cx.semCont)}/semana`:'';
+  }
+  return {projRealtime,diasDecorridos,diasNoMes,pctTempo,paceMsg,recBruta:cx.recBruta};
+}
+function estimativaDiaExtra(rotaNome){
+  const rotas=DB.cfg.rotas||[];
+  const rota=rotaNome==='geral'?(rotas.find(r=>!r.dataFim)||rotas[0]):rotas.find(r=>r.nome===rotaNome);
+  if(!rota) return null;
+  const fixoDia=(+rota.saidaDia||0)+(+rota.pontosDia||0)+(+rota.incentivoDia||0);
+  const cx=computeRota(rotaNome,curMA());
+  const pktsDiaMedia=cx.totDias>0?(cx.totPkts*(+DB.cfg.valorPacote||0.5))/cx.totDias:0;
+  const estimativa=fixoDia+pktsDiaMedia;
+  return estimativa>0?{fixoDia,pktsDiaMedia,estimativa}:null;
+}
+function timelineSemanas(rotaNome,n){
+  n=n||7;
+  const all=semanasRota(rotaNome).slice(-n);
+  if(!all.length) return [];
+  const diaVal=s=>(+s.total||0)/Math.max(1,+s.dias||1);
+  const media=all.reduce((a,s)=>a+diaVal(s),0)/all.length;
+  const max=Math.max(...all.map(s=>+s.total||0),1);
+  return all.map(s=>{
+    const pct=media>0?(diaVal(s)/media)*100:100;
+    let cor,icon;
+    if(pct>=115){cor='var(--gn)';icon='🔥';}
+    else if(pct>=95){cor='var(--gn)';icon='✅';}
+    else if(pct>=80){cor='var(--yw)';icon='⚠️';}
+    else {cor='var(--rd)';icon='🔴';}
+    const d=new Date(s.data+'T12:00:00');
+    return {dataLbl:String(d.getDate()).padStart(2,'0')+'/'+MN[d.getMonth()],total:+s.total||0,barH:Math.max(6,((+s.total||0)/max)*46),cor,icon};
+  });
+}
+
 function chartRotaReceita(rotaNome){
   const vs=Array.from({length:6},(_,i)=>{
     const d=new Date();d.setMonth(d.getMonth()-(5-i));
@@ -652,7 +739,10 @@ function renderDash(){
   const al=getAlerts();
   const rotas=DB.cfg.rotas||[];
   const cx=computeRota(dashTab);
-  const pct=cx.recBruta>0?Math.min(100,Math.round((cx.recBruta/cx.proj)*100)):0;
+  const score=computeScoreSemana(dashTab);
+  const projRT=computeProjecaoRealtime(dashTab);
+  const estDia=estimativaDiaExtra(dashTab);
+  const timeline=timelineSemanas(dashTab,7);
 
   // Tab labels
   const rotasAtivas=rotas.filter(r=>!r.dataFim||r.dataFim>=curMA().split('/').reverse().join('-').slice(0,7));
@@ -660,7 +750,7 @@ function renderDash(){
 
   const kpis=[
     {label:'Receita Bruta',val:R$(cx.recBruta),color:'var(--gn)',icon:'💰',sub:`${cx.semCont} semana(s)`},
-    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.rotaNome==='geral'?R$(cx.totalFixas):R$(cx.totalFixas)+' prop.')}`},
+    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}${cx.rotaNome==='geral'?'':' (prop.)'}`},
     {label:'Lucro Líquido',val:R$(cx.lucro),color:cx.lucro>=0?'var(--gn)':'var(--rd)',icon:cx.lucro>=0?'✅':'⚠️',sub:'Receita − Despesas'},
     {label:'Pacotes no Mês',val:(cx.totPkts||0).toLocaleString('pt-BR')+' un',color:'var(--yw)',icon:'📦',sub:R$(cx.totPkts*0.5)+' em receita'},
   ];
@@ -686,7 +776,40 @@ function renderDash(){
 
     <div class="kpi-grid">${kpis.map(k=>`<div class="kpi" style="border-left-color:${k.color}"><div class="ki">${k.icon}</div><div class="kl">${k.label}</div><div class="kv" style="color:${k.color}">${k.val}</div><div class="ks">${k.sub}</div></div>`).join('')}</div>
 
-    ${cx.semCont>0?`<div class="card"><div class="ct">📈 Projeção do mês</div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><div style="font-size:11px;color:var(--t2)">Atual</div><div class="fw8 c-gn" style="font-size:16px">${R$(cx.recBruta)}</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--t2)">Projeção</div><div class="fw8 c-ac" style="font-size:16px">${R$(cx.proj)}</div></div></div><div class="pbg"><div class="pfill" style="width:${pct}%"></div></div><div style="font-size:11px;color:var(--t2)">${pct}% concluído · Média ${R$(cx.recBruta/cx.semCont)}/semana</div></div>`:''}
+    ${score?`<div class="card" style="border-left:4px solid ${score.cor}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div class="ct" style="margin-bottom:6px">${score.icon} Score da última semana${dashTab!=='geral'?` — ${dashTab}`:''}</div>
+          <div class="fw8 ff" style="font-size:24px;color:${score.cor}">${score.label}</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:8px;line-height:1.5;max-width:480px">
+            ${score.ultima.data.split('-').reverse().join('/')} rendeu <b style="color:var(--tx)">${R$(score.ultimaDia)}/dia</b>,
+            <b style="color:${score.cor}">${score.pct}%</b> ${score.diffTotal>=0?'acima':'abaixo'} da média das últimas ${score.histCount} semana(s)
+            (${R$(score.mediaDia)}/dia). Isso representa cerca de <b style="color:${score.cor}">${R$(Math.abs(score.diffTotal))}</b> ${score.diffTotal>=0?'a mais':'a menos'} na semana.
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--t2)">vs média histórica</div>
+          <div class="fw8 ff" style="font-size:26px;color:${score.cor}">${score.pct}%</div>
+        </div>
+      </div>
+    </div>`:''}
+
+    ${timeline.length>1?`<div class="card"><div class="ct">📊 Últimas semanas${dashTab!=='geral'?` — ${dashTab}`:''}</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+        ${timeline.map(w=>`<div style="flex:0 0 auto;min-width:76px;text-align:center;padding:10px 8px;border-radius:10px;background:var(--s2);border:1.5px solid ${w.cor}22">
+          <div style="font-size:9px;color:var(--t2);font-weight:700">${w.dataLbl}</div>
+          <div style="display:flex;align-items:flex-end;justify-content:center;height:52px;margin:6px 0">
+            <div style="width:20px;height:${w.barH}px;background:${w.cor};border-radius:4px"></div>
+          </div>
+          <div style="font-size:12px">${w.icon}</div>
+          <div style="font-size:10px;color:var(--tx);font-weight:700;margin-top:2px">${w.total>=1000?'R$'+(w.total/1000).toFixed(1)+'k':R$(w.total)}</div>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+
+    ${projRT.recBruta>0?`<div class="card"><div class="ct">📈 Projeção do mês (tempo real)</div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><div style="font-size:11px;color:var(--t2)">Atual</div><div class="fw8 c-gn" style="font-size:16px">${R$(projRT.recBruta)}</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--t2)">Projeção do mês</div><div class="fw8 c-ac" style="font-size:16px">${R$(projRT.projRealtime)}</div></div></div><div class="pbg"><div class="pfill" style="width:${Math.min(100,projRT.pctTempo)}%"></div></div><div style="font-size:11px;color:var(--t2)">${projRT.diasDecorridos}/${projRT.diasNoMes} dias do mês (${projRT.pctTempo}%)${projRT.paceMsg?' · '+projRT.paceMsg:''}</div></div>`:''}
+
+    ${estDia?`<div class="card" style="border-left:3px solid var(--bl)"><div class="ct">💡 Insight estratégico</div><div style="font-size:13px;color:var(--tx);line-height:1.6">Se trabalhar <b>+1 dia</b> essa semana, a estimativa é de <b class="c-gn">+${R$(estDia.estimativa)}</b> (${R$(estDia.fixoDia)} fixo da rota + ${R$(estDia.pktsDiaMedia)} em pacotes, baseado na sua média atual).</div></div>`:''}
 
     <div class="two-col">
       <div class="card"><div class="ct">Receita · Últimos 6 meses</div><div class="chw">${chartRotaReceita(dashTab)}</div></div>
