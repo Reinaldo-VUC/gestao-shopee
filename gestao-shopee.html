@@ -1596,8 +1596,8 @@ window.importBackup=input=>{
 };
 
 // ═══════════ PDF ══════════════════════════════════════════════════
-function gerarPDF(){
-  const cx=compute(),c=DB.cfg,win=window.open('','_blank');
+function gerarPDF(ma){
+  const cx=compute(ma),c=DB.cfg,win=window.open('','_blank');
   const sRows=cx.semMes.map((s,i)=>`<tr><td>Sem.${i+1}</td><td>${s.data}</td><td>${s.dias}d</td><td>${(+s.pkts||0).toLocaleString('pt-BR')}</td><td>${R$(s.fixoTotal)}</td><td>${R$(s.pedPago)}</td><td>${R$(s.valPkts)}</td><td>${R$(s.custoMot)}</td><td><b>${R$(s.total)}</b></td></tr>`).join('');
   const vRows=cx.varMes.map(v=>`<tr><td>${CATS[v.cat]||'📌'} ${v.cat}</td><td>${v.data}</td><td colspan="6">${v.obs||'—'}</td><td><b style="color:#e11d48">${R$(v.valor)}</b></td></tr>`).join('');
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório ${mALbl(cx.ma)}</title><style>body{font-family:sans-serif;padding:24px;color:#1a202c;max-width:1000px;margin:0 auto;font-size:13px}h1{color:#f05a28;font-size:20px;margin-bottom:2px}h2{color:#64748b;font-size:13px;margin-bottom:20px;font-weight:400}h3{font-size:14px;margin:20px 0 8px}.kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}.kbox{flex:1;min-width:100px;background:#f8fafc;border-radius:10px;padding:12px;border:1px solid #e2e8f0}.klbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}.kval{font-size:16px;font-weight:800;margin-top:4px}.gn{color:#16a34a}.rd{color:#e11d48}.ac{color:#f05a28}.bl{color:#2563eb}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}th{background:#f0f4f8;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em}td{padding:7px 8px;border-bottom:1px solid #e2e8f0}@media print{button{display:none}}</style></head><body>
@@ -3105,7 +3105,7 @@ function renderFin(){
     })()}
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
-      <button class="btn bgh" onclick="gerarPDF()">📄 Exportar PDF</button>
+      <button class="btn bgh" onclick="gerarPDF('${finMes}')">📄 Exportar PDF</button>
     </div>`;
 }
 
