@@ -577,14 +577,32 @@ function computeRota(rotaNome, ma){
   const recBruta  = sems.reduce((a,s)=>a+(+s.total||0),0);
   const totPkts   = sems.reduce((a,s)=>a+(+s.pkts||0),0);
   const totDias   = sems.reduce((a,s)=>a+(+s.dias||0),0);
-  // custoMot: usa o valor salvo no lançamento (diária da rota × dias, calculado no momento do lançamento)
-  // Se não tiver salvo, calcula pela rota
-  const custoMot  = sems.reduce((a,s)=>{
-    if(+s.custoMot>0) return a+(+s.custoMot);
-    // fallback: tenta pegar diária da rota
-    const rota = rotas.find(r=>r.nome===s.rotaId);
-    const motDia = rota?+rota.motDiaPadrao||0:0;
-    return a + motDia*(+s.dias||0);
+  // custoMot: calculado pela CONFIG DA ROTA (fixo mensal real, não multiplicado por nº de lançamentos)
+  // — mesma lógica usada no Financeiro, pra nunca mais divergir.
+  let custoMot = 0;
+  const rotaIdsNoMes = [...new Set(sems.map(s=>s.rotaId||rotas[0]?.nome))].filter(Boolean);
+  rotaIdsNoMes.forEach(rid=>{
+    const rota = rotas.find(r=>r.nome===rid);
+    if(!rota) return;
+    const semsRota = sems.filter(s=>(s.rotaId||rotas[0]?.nome)===rid);
+    if(rota.motTipo==='fixo'&&rota.motFixoMensal){
+      custoMot += custoFixoMensalReal(rota.motFixoMensal,rota.motSabInclusos,rota.motSabExtra,semsRota).total;
+    } else if(rota.motTipo==='diaria'&&rota.motDiaPadrao){
+      custoMot += (+rota.motDiaPadrao||0)*semsRota.reduce((a,s)=>a+(+s.dias||0),0);
+    }
+    (rota.equipe||[]).filter(m=>m.funcao!=='dono').forEach(m=>{
+      if(m.tipo==='fixo_mensal'){
+        custoMot += custoFixoMensalReal(m.fixoMensal,m.sabInclusos,m.sabExtra,semsRota).total;
+      } else {
+        semsRota.forEach(s=>{const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);if(log)custoMot+=(+m.diaria||0)*(log.nDias||0);});
+      }
+    });
+  });
+  // pedágio gasto real (mesma lógica/fallback do Financeiro): campo novo, ou antigo, ou padrão R$25,10/dia
+  const pedGastoTotal = sems.reduce((a,s)=>{
+    if(+s.pedGastoTotal>0) return a+(+s.pedGastoTotal);
+    if(+s.pedPago>0) return a+(+s.pedPago);
+    return a+(25.10*(+s.dias||0));
   },0);
   const totalFixasBase=(+c.financiamento||0)+(+c.seguro||0)+(c.fixasExtras||[]).reduce((a,x)=>a+(+x.valor||0),0);
   const totalVar  = varMes.reduce((a,v)=>a+(+v.valor||0),0);
@@ -608,10 +626,10 @@ function computeRota(rotaNome, ma){
   }
 
   const totalFixas = fixasPropRota(rotaNome, ma);
-  const totalDesp = totalFixas+totalVar+custoMot;
+  const totalDesp = totalFixas+totalVar+custoMot+pedGastoTotal;
   const lucro     = recBruta-totalDesp;
   const semCont   = sems.length, mediaRec=semCont>0?recBruta/semCont:0, proj=mediaRec*4.3;
-  return {recBruta,totPkts,totDias,custoMot,totalFixas,totalFixasBase,totalVar,totalDesp,lucro,semCont,proj,sems,rotaNome};
+  return {recBruta,totPkts,totDias,custoMot,pedGastoTotal,totalFixas,totalFixasBase,totalVar,totalDesp,lucro,semCont,proj,sems,rotaNome};
 }
 
 // ═══════════ PAINEL — SCORE, PROJEÇÃO TEMPO REAL, INSIGHTS ════════
@@ -750,7 +768,7 @@ function renderDash(){
 
   const kpis=[
     {label:'Receita Bruta',val:R$(cx.recBruta),color:'var(--gn)',icon:'💰',sub:`${cx.semCont} semana(s)`},
-    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Fixas ${R$(cx.totalFixas)}${cx.rotaNome==='geral'?'':' (prop.)'}`},
+    {label:'Total Despesas',val:R$(cx.totalDesp),color:'var(--rd)',icon:'📤',sub:`Mot. ${R$(cx.custoMot)} + Ped. ${R$(cx.pedGastoTotal)} + Fixas ${R$(cx.totalFixas)}${cx.rotaNome==='geral'?'':' (prop.)'}`},
     {label:'Lucro Líquido',val:R$(cx.lucro),color:cx.lucro>=0?'var(--gn)':'var(--rd)',icon:cx.lucro>=0?'✅':'⚠️',sub:'Receita − Despesas'},
     {label:'Pacotes no Mês',val:(cx.totPkts||0).toLocaleString('pt-BR')+' un',color:'var(--yw)',icon:'📦',sub:R$(cx.totPkts*0.5)+' em receita'},
   ];
@@ -2525,6 +2543,17 @@ let finMes = curMA();
 window.setFinMes=function(ma){ finMes=ma; render(); };
 
 // Calcula dados financeiros detalhados do mês
+// ═══════════ CUSTO FIXO MENSAL DA EQUIPE (fonte única) ════════════
+// Valor fixo mensal real pago (2 quinzenas) + sábados extras.
+// NÃO multiplica pelo nº de "semanas" lançadas no app — isso é só um registro
+// de operação, o salário fixo é o mesmo todo mês independente de quantas
+// vezes você lançou uma semana.
+function custoFixoMensalReal(fixoMensal,sabInclusos,sabExtra,semsRota){
+  const sabsN=semsRota.filter(s=>s.teveSabado).length;
+  const sabExt=Math.max(0,sabsN-(+sabInclusos||2));
+  const total=(+fixoMensal||0)+sabExt*(+sabExtra||0);
+  return {total,sabExt};
+}
 function calcFinanceiro(ma){
   const c=DB.cfg, rotas=c.rotas||[];
   const sems=DB.semanas.filter(s=>mAStr(s.data)===ma);
@@ -2550,20 +2579,19 @@ function calcFinanceiro(ma){
     });
   });
   // Calcula custo Jeferson PELA CONFIG DA ROTA (ignora custoMot antigo)
+  // IMPORTANTE: motFixoMensal/fixoMensal é o valor REAL pago no mês (2 quinzenas),
+  // não deve ser multiplicado pelo nº de "semanas" lançadas — isso inflava o custo
+  // sempre que o mês tinha mais (ou menos) de 4,3 lançamentos.
   let custoEquipeTotal = 0;
   rotas.forEach(rota=>{
     const semsRota=sems.filter(s=>s.rotaId===rota.nome);
     if(!semsRota.length) return;
     if(rota.motTipo==='fixo'&&rota.motFixoMensal){
-      const sabsN=semsRota.filter(s=>s.teveSabado).length;
-      const sabExt=Math.max(0,sabsN-(+rota.motSabInclusos||2));
-      custoEquipeTotal+=semsRota.length*(+rota.motFixoMensal/4.3)+sabExt*(+rota.motSabExtra||0);
+      custoEquipeTotal+=custoFixoMensalReal(rota.motFixoMensal,rota.motSabInclusos,rota.motSabExtra,semsRota).total;
     }
     (rota.equipe||[]).filter(m=>m.funcao!=='dono').forEach(m=>{
       if(m.tipo==='fixo_mensal'){
-        const sabsN=semsRota.filter(s=>s.teveSabado).length;
-        const sabExt=Math.max(0,sabsN-(+m.sabInclusos||2));
-        custoEquipeTotal+=semsRota.length*(+m.fixoMensal/4.3)+sabExt*(+m.sabExtra||0);
+        custoEquipeTotal+=custoFixoMensalReal(m.fixoMensal,m.sabInclusos,m.sabExtra,semsRota).total;
       } else {
         semsRota.forEach(s=>{const log=(s.equipeLog||[]).find(l=>l.nome===m.nome);if(log)custoEquipeTotal+=(+m.diaria||0)*(log.nDias||0);});
       }
@@ -2875,19 +2903,14 @@ function renderFin(){
           if(rota.motNome && rota.motTipo==='fixo' && rota.motFixoMensal){
             const _sr=f.sems.filter(s=>s.rotaId===rota.nome);
             if(!_sr.length) return; // pula rotas sem lançamentos neste mês
-            const sabsN=_sr.filter(s=>s.teveSabado).length;
-            const sabExt=Math.max(0,sabsN-(+rota.motSabInclusos||2));
-            const extVal=sabExt*(+rota.motSabExtra||0);
-            const total=_sr.length*(+rota.motFixoMensal/4.3)+extVal;
+            const {total,sabExt}=custoFixoMensalReal(rota.motFixoMensal,rota.motSabInclusos,rota.motSabExtra,_sr);
             equipeRows.push(`<div class="row"><span class="rl">🚗 ${rota.motNome} (motorista fixo${sabExt>0?' +'+sabExt+' sáb extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$(total)}</span></div>`);
           }
           // Equipe adicional - soma pelos lançamentos
           (rota.equipe||[]).forEach(m=>{
             if(m.tipo==='fixo_mensal'){
-              const sabsN=f.sems.filter(s=>s.rotaId===rota.nome&&s.teveSabado).length;
-              const sabExt=Math.max(0,sabsN-(+m.sabInclusos||2));
-              const extVal=sabExt*(+m.sabExtra||0);
-              const total=f.sems.filter(s=>s.rotaId===rota.nome).length*(+m.fixoMensal/4.3)+extVal;
+              const _srm=f.sems.filter(s=>s.rotaId===rota.nome);
+              const {total,sabExt}=custoFixoMensalReal(m.fixoMensal,m.sabInclusos,m.sabExtra,_srm);
               equipeRows.push(`<div class="row"><span class="rl">${m.funcao==='motorista'?'🚗':'🤝'} ${m.nome} (fixo${sabExt>0?' +'+sabExt+' sáb extra':''}) — ${rota.nome}</span><span class="rv c-bl">${R$(total)}</span></div>`);
             } else {
               // Diária: soma pelos equipeLog dos lançamentos
